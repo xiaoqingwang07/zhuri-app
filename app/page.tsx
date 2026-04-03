@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Goal, DayTask, Badge, SupervisionUser, BADGES, MAX_GOALS } from "@/lib/types";
 import {
   loadGoals,
@@ -33,14 +33,25 @@ export default function Home() {
   const [isOnboarding, setIsOnboarding] = useState(false);
   const [supervisionUsers, setSupervisionUsers] = useState<SupervisionUser[]>([]);
 
+  // P2-6: Manual theme toggle
+  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
+
+  // P2-7: Notification reminder
+  const [reminderEnabled, setReminderEnabled] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+
+  // P2-8: Export/Import
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Goal creation state
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [goalName, setGoalName] = useState("");
   const [totalDays, setTotalDays] = useState(20);
   const [selectedTemplate, setSelectedTemplate] = useState<number | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-  const [creatingStep, setCreatingStep] = useState<"input" | "loading" | "done">("input");
+  const [creatingStep, setCreatingStep] = useState<"input" | "loading" | "confirm" | "done">("input");
   const [loadingCountdown, setLoadingCountdown] = useState(15);
+  const [pendingTasks, setPendingTasks] = useState<DayTask[] | null>(null);
 
   // Reset creating state when form is shown
   useEffect(() => {
@@ -51,6 +62,7 @@ export default function Home() {
       setSelectedTemplate(null);
       setError("");
       setLoadingCountdown(15);
+      setPendingTasks(null);
     }
   }, [showCreateForm]);
 
@@ -60,7 +72,61 @@ export default function Home() {
     setCreatingStep("input");
   }, []);
 
-  // Preset templates
+  // P2-6: Load theme from localStorage and apply
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('zhuri_theme') as 'light' | 'dark' | 'system' | null;
+    if (savedTheme) {
+      setTheme(savedTheme);
+    } else {
+      setTheme('system');
+    }
+  }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else if (theme === 'light') {
+      root.classList.remove('dark');
+    } else {
+      // system: follow prefers-color-scheme
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (prefersDark) {
+        root.classList.add('dark');
+      } else {
+        root.classList.remove('dark');
+      }
+    }
+    localStorage.setItem('zhuri_theme', theme);
+  }, [theme]);
+
+  // P2-7: Load notification state and check on mount
+  useEffect(() => {
+    const savedReminder = localStorage.getItem('zhuri_reminder_enabled');
+    if (savedReminder === 'true') {
+      setReminderEnabled(true);
+    }
+
+    if (typeof Notification !== 'undefined') {
+      setNotificationPermission(Notification.permission);
+    }
+
+    // P2-7: Check if should show 21:00 reminder
+    if (savedReminder === 'true' && typeof Notification !== 'undefined') {
+      const now = new Date();
+      const hour = now.getHours();
+      const todayStr = now.toISOString().split('T')[0];
+      const goals = loadGoals();
+      const todayCompleted = goals.some(g =>
+        g.tasks.some(t => t.date === todayStr && t.completed)
+      );
+      if (!todayCompleted && hour >= 21 && Notification.permission === 'granted') {
+        new Notification('逐日', {
+          body: '今天还没打卡，别断了自己的连续天数！',
+        });
+      }
+    }
+  }, []);
   const templates = [
     { name: "📚 读书计划", prefix: "读完《", suffix: "》", days: 20, icon: "📖" },
     { name: "🏃 跑步计划", prefix: "完成", suffix: "公里", days: 30, icon: "🏃" },
@@ -142,7 +208,10 @@ export default function Home() {
       const tasks = await generateTasksWithAI(goalName, totalDays, controller.signal);
       clearTimeout(timeoutId);
       clearInterval(countdownId);
-      completeGoalCreation(tasks);
+      // P0-2: Go to confirm step instead of directly creating
+      setPendingTasks(tasks);
+      setCreatingStep("confirm");
+      setIsCreating(false);
     } catch (err: any) {
       clearTimeout(timeoutId);
       clearInterval(countdownId);
@@ -156,24 +225,27 @@ export default function Home() {
       // Short delay so user sees the error message before fallback
       setTimeout(() => {
         const fallbackTasks = generateDefaultTasks(totalDays, goalName);
-        completeGoalCreation(fallbackTasks);
+        setPendingTasks(fallbackTasks);
+        setCreatingStep("confirm");
+        setIsCreating(false);
       }, 1500);
     }
   };
 
-  const completeGoalCreation = (tasks: DayTask[]) => {
-    const newGoal = createInitialGoal(goalName, goalName, totalDays, tasks);
+  // P0-2: Confirm tasks before committing
+  const confirmTasks = () => {
+    if (!pendingTasks) return;
+    const newGoal = createInitialGoal(goalName, goalName, totalDays, pendingTasks);
     const updatedGoals = [...goals, newGoal];
     setGoals(updatedGoals);
     setActiveGoalId(newGoal.id);
     setShowCreateForm(false);
     setCreatingStep("done");
-    setIsCreating(false);
-    
+    setPendingTasks(null);
     setTimeout(() => {
       setActiveTab("today");
       setCreatingStep("input");
-    }, 1500);
+    }, 100);
   };
 
   const handleCheckIn = (dayIndex: number) => {
@@ -811,6 +883,137 @@ export default function Home() {
         {activeTab === "settings" && (
           <div className="space-y-4 slide-up">
             <h2 className="text-lg font-bold">⚙️ 设置</h2>
+
+            {/* P2-6: Theme Toggle */}
+            <div className="bg-[var(--bg-card)] rounded-2xl p-4 border border-[var(--border)]" style={{ boxShadow: 'var(--shadow-sm)' }}>
+              <p className="text-sm text-[var(--text-secondary)] mb-3">外观模式</p>
+              <div className="flex bg-[var(--bg-primary)] rounded-xl p-1">
+                {(['light', 'dark', 'system'] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setTheme(t)}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
+                      theme === t
+                        ? 'bg-[var(--accent)] text-white'
+                        : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                    }`}
+                  >
+                    {t === 'light' ? '☀️ 浅色' : t === 'dark' ? '🌙 深色' : '💻 跟随系统'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* P2-7: Notification Reminder */}
+            <div className="bg-[var(--bg-card)] rounded-2xl p-4 border border-[var(--border)]" style={{ boxShadow: 'var(--shadow-sm)' }}>
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-sm font-medium">📬 21:00 打卡提醒</p>
+                  <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                    通知权限: <span className={
+                      notificationPermission === 'granted' ? 'text-[var(--success)]' :
+                      notificationPermission === 'denied' ? 'text-[var(--danger)]' :
+                      'text-[var(--text-secondary)]'
+                    }>{notificationPermission === 'granted' ? '已授权' : notificationPermission === 'denied' ? '已拒绝' : '未授权'}</span>
+                  </p>
+                </div>
+                {notificationPermission === 'default' ? (
+                  <button
+                    onClick={async () => {
+                      const perm = await Notification.requestPermission();
+                      setNotificationPermission(perm);
+                      if (perm === 'granted') {
+                        setReminderEnabled(true);
+                        localStorage.setItem('zhuri_reminder_enabled', 'true');
+                      }
+                    }}
+                    className="px-4 py-2 bg-[var(--accent)] text-white rounded-lg text-sm font-medium"
+                  >
+                    开启
+                  </button>
+                ) : notificationPermission === 'denied' ? (
+                  <span className="text-xs text-[var(--text-secondary)]">请在浏览器设置中开启</span>
+                ) : (
+                  <button
+                    onClick={() => {
+                      const newVal = !reminderEnabled;
+                      setReminderEnabled(newVal);
+                      localStorage.setItem('zhuri_reminder_enabled', String(newVal));
+                    }}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      reminderEnabled
+                        ? 'bg-[var(--success)] text-white'
+                        : 'bg-[var(--bg-primary)] text-[var(--text-secondary)]'
+                    }`}
+                  >
+                    {reminderEnabled ? '已开启' : '已关闭'}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* P2-8: Data Export/Import */}
+            <div className="bg-[var(--bg-card)] rounded-2xl p-4 border border-[var(--border)]" style={{ boxShadow: 'var(--shadow-sm)' }}>
+              <p className="text-sm text-[var(--text-secondary)] mb-3">数据管理</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    const allData: Record<string, string> = {};
+                    for (let i = 0; i < localStorage.length; i++) {
+                      const key = localStorage.key(i);
+                      if (key && key.startsWith('zhuri_')) {
+                        allData[key] = localStorage.getItem(key) || '';
+                      }
+                    }
+                    const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `zhuri-backup-${new Date().toISOString().split('T')[0]}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    console.log('✅ 数据导出 完成');
+                  }}
+                  className="flex-1 py-3 bg-[var(--bg-primary)] text-[var(--text-primary)] rounded-xl font-medium hover:bg-[var(--accent)]/10 transition-colors text-sm"
+                >
+                  📤 导出数据
+                </button>
+                <button
+                  onClick={() => {
+                    fileInputRef.current?.click();
+                  }}
+                  className="flex-1 py-3 bg-[var(--bg-primary)] text-[var(--text-primary)] rounded-xl font-medium hover:bg-[var(--accent)]/10 transition-colors text-sm"
+                >
+                  📥 导入数据
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      try {
+                        const data = JSON.parse(ev.target?.result as string);
+                        for (const [key, value] of Object.entries(data)) {
+                          if (key.startsWith('zhuri_') && typeof value === 'string') {
+                            localStorage.setItem(key, value);
+                          }
+                        }
+                        console.log('✅ 数据导入 完成');
+                        window.location.reload();
+                      } catch {
+                        alert('导入失败，文件格式错误');
+                      }
+                    };
+                    reader.readAsText(file);
+                  }}
+                />
+              </div>
+            </div>
 
             <div className="bg-[var(--bg-card)] rounded-2xl p-4 space-y-4 border border-[var(--border)]" style={{ boxShadow: 'var(--shadow-sm)' }}>
               <button
