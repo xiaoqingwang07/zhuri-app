@@ -32,6 +32,18 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 
   return (
     <div className="fixed inset-0 bg-[var(--bg-primary)] flex flex-col z-50">
+      {/* Skip button - top right, always visible */}
+      {step < slides.length - 1 && (
+        <div className="absolute top-6 right-6 z-10">
+          <button
+            onClick={onComplete}
+            className="px-4 py-1.5 rounded-full text-sm text-[var(--text-secondary)] hover:text-white border border-gray-700 hover:border-gray-500 transition-colors"
+          >
+            跳过
+          </button>
+        </div>
+      )}
+
       <div className="flex-1 flex flex-col items-center justify-center p-8">
         <div className="text-center max-w-sm">
           <div className="text-8xl mb-8 animate-bounce">{slides[step].icon}</div>
@@ -70,15 +82,10 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
           {step < slides.length - 1 ? "下一步" : "开始逐日"}
         </button>
 
-        {/* Skip */}
-        {step < slides.length - 1 && (
-          <button
-            onClick={onComplete}
-            className="w-full py-2 text-[var(--text-secondary)] hover:text-white transition-colors"
-          >
-            跳过
-          </button>
-        )}
+        {/* Step counter */}
+        <p className="text-center text-xs text-[var(--text-secondary)]">
+          {step + 1} / {slides.length}
+        </p>
       </div>
     </div>
   );

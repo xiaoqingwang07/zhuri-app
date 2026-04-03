@@ -201,6 +201,9 @@ export default function Home() {
     // Show check-in feedback
     setJustCheckedIn(true);
     setTimeout(() => setJustCheckedIn(false), 2000);
+
+    // Mark check-in hint as shown
+    localStorage.setItem("zhuri_checkin_hint_shown", "1");
   };
 
   const handleReset = () => {
@@ -301,13 +304,13 @@ export default function Home() {
                           setSelectedTemplate(idx);
                           setTotalDays(t.days);
                         }}
-                        className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
+                        className={`px-3 py-1.5 rounded-full text-sm transition-all ${
                           isSelected
-                            ? "bg-[var(--accent)] text-white"
-                            : "bg-[var(--bg-primary)] text-[var(--text-secondary)] hover:text-white"
+                            ? "bg-[var(--accent)] text-white font-semibold ring-2 ring-[var(--accent)] ring-offset-1 ring-offset-[var(--bg-secondary)]"
+                            : "bg-[var(--bg-primary)] text-[var(--text-secondary)] hover:text-white hover:bg-[var(--bg-primary)] hover:ring-1 hover:ring-gray-600"
                         }`}
                       >
-                        {t.icon} {t.name}
+                        {isSelected ? "✓ " : ""}{t.icon} {t.name}
                       </button>
                     );
                   })}
@@ -363,18 +366,18 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Main button - always clickable unless creating */}
+              {/* Main button - disabled when empty or creating */}
               <button
                 onClick={createGoal}
-                disabled={isCreating}
+                disabled={isCreating || !goalName.trim()}
                 style={{
-                  backgroundColor: isCreating ? "#666" : undefined,
-                  cursor: isCreating ? "not-allowed" : "pointer",
-                  opacity: isCreating ? 0.6 : 1,
+                  backgroundColor: isCreating || !goalName.trim() ? "#444" : undefined,
+                  cursor: isCreating || !goalName.trim() ? "not-allowed" : "pointer",
+                  opacity: isCreating || !goalName.trim() ? 0.5 : 1,
                 }}
                 className="w-full font-semibold py-3 rounded-xl transition-all text-white bg-orange-500 hover:bg-orange-600 disabled:bg-gray-600"
               >
-                {isCreating ? "AI正在拆解目标..." : "开始逐日"}
+                {isCreating ? "AI正在拆解目标..." : !goalName.trim() ? "请输入目标名称" : "开始逐日"}
               </button>
 
               {/* Reset button if stuck */}
@@ -595,44 +598,52 @@ export default function Home() {
                   </button>
                 </div>
               ) : (
-                todayTasks.map((task, idx) => {
-                  const taskIndex = activeGoal.tasks.findIndex((t) => t.day === task.day);
-                  return (
-                    <div
-                      key={task.day}
-                      className={`bg-[var(--bg-secondary)] rounded-xl p-4 transition-all ${
-                        task.completed ? "opacity-60" : ""
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <button
-                          onClick={() => !task.completed && handleCheckIn(taskIndex)}
-                          disabled={task.completed}
-                          className={`w-8 h-8 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${
-                            task.completed
-                              ? "bg-[var(--success)] border-[var(--success)] text-white"
-                              : "border-[var(--accent)] hover:bg-[var(--accent)]/20"
-                          }`}
-                        >
-                          {task.completed ? "✓" : ""}
-                        </button>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs px-2 py-0.5 bg-[var(--bg-primary)] rounded text-[var(--text-secondary)]">
-                              {task.type === "reading" && "📖 阅读"}
-                              {task.type === "notes" && "📝 笔记"}
-                              {task.type === "review" && "🔍 回顾"}
-                              {task.type === "summary" && "📋 总结"}
-                            </span>
-                            <span className="text-xs text-[var(--text-secondary)]">{task.pages}</span>
-                          </div>
-                          <p className={`${task.completed ? "line-through" : ""}`}>{task.task}</p>
+                <>
+                  {/* Check-in hint - shown only when tasks exist, none completed, and hint not yet shown */}
+                  {completedToday === 0 && !localStorage.getItem("zhuri_checkin_hint_shown") && (
+                    <div className="bg-[var(--accent)]/10 border border-[var(--accent)]/30 rounded-xl px-4 py-3 text-sm text-[var(--accent)]">
+                      👆 点击左侧圆形按钮完成打卡
+                    </div>
+                  )}
+                  {todayTasks.map((task, idx) => {
+                    const taskIndex = activeGoal.tasks.findIndex((t) => t.day === task.day);
+                    return (
+                      <div
+                        key={task.day}
+                        className={`bg-[var(--bg-secondary)] rounded-xl p-4 transition-all ${
+                          task.completed ? "opacity-60" : ""
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <button
+                            onClick={() => !task.completed && handleCheckIn(taskIndex)}
+                            disabled={task.completed}
+                            className={`w-8 h-8 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${
+                              task.completed
+                                ? "bg-[var(--success)] border-[var(--success)] text-white"
+                                : "border-[var(--accent)] hover:bg-[var(--accent)]/20"
+                            }`}
+                          >
+                            {task.completed ? "✓" : ""}
+                          </button>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs px-2 py-0.5 bg-[var(--bg-primary)] rounded text-[var(--text-secondary)]">
+                                {task.type === "reading" && "📖 阅读"}
+                                {task.type === "notes" && "📝 笔记"}
+                                {task.type === "review" && "🔍 回顾"}
+                                {task.type === "summary" && "📋 总结"}
+                              </span>
+                              <span className="text-xs text-[var(--text-secondary)]">{task.pages}</span>
+                            </div>
+                            <p className={`${task.completed ? "line-through" : ""}`}>{task.task}</p>
                         </div>
                       </div>
                     </div>
                   );
-                })
-              )}
+                })}
+              </>
+            )}
             </div>
 
             {/* Next Day Preview */}
@@ -811,6 +822,14 @@ export default function Home() {
                 </p>
               </div>
             </div>
+
+            {/* History entry - P2-5 */}
+            <button
+              onClick={() => setActiveTab("calendar")}
+              className="w-full py-2 text-center text-sm text-[var(--accent)] hover:underline"
+            >
+              📅 查看完整日历
+            </button>
           </div>
         )}
       </main>
