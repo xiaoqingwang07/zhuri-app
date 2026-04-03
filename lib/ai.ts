@@ -12,7 +12,7 @@ import { DayTask } from "./types";
  * 3. Set VITE_WORKER_URL=https://your-worker.your-subdomain.workers.dev in your .env
  */
 
-const WORKER_URL = "https://zhuri-ai-proxy.chenyejie.workers.dev";
+const WORKER_URL = "https://zhuri-ai-proxy.xiaoqingwang07.workers.dev";
 
 const SYSTEM_PROMPT = `你是一位专业的阅读教练，擅长将大目标拆解为每日可执行的任务。
 
