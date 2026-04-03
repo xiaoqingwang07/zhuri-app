@@ -262,9 +262,9 @@ export default function Home() {
               {/* Step indicator */}
               <div className="flex items-center justify-center gap-2 text-xs text-[var(--text-secondary)]">
                 <span className={loadingCountdown <= 12 ? "text-[var(--accent)] font-medium" : ""}>① 分析目标</span>
-                <span className="text-gray-600">→</span>
+                <span className="text-[var(--text-secondary)]">→</span>
                 <span className={loadingCountdown <= 8 ? "text-[var(--accent)] font-medium" : ""}>② 生成任务</span>
-                <span className="text-gray-600">→</span>
+                <span className="text-[var(--text-secondary)]">→</span>
                 <span className={loadingCountdown <= 4 ? "text-[var(--accent)] font-medium" : ""}>③ 完成</span>
               </div>
             </div>
@@ -284,7 +284,7 @@ export default function Home() {
                     setError("");
                   }
                 }}
-                className="w-full text-xs text-gray-500 hover:text-gray-400 py-1"
+                className="w-full text-xs text-[var(--text-secondary)] hover:text-[var(--text-secondary)] py-1"
               >
                 🔄 清除数据重新开始
               </button>
@@ -306,8 +306,8 @@ export default function Home() {
                         }}
                         className={`px-3 py-1.5 rounded-full text-sm transition-all ${
                           isSelected
-                            ? "bg-[var(--accent)] text-white font-semibold ring-2 ring-[var(--accent)] ring-offset-1 ring-offset-[var(--bg-secondary)]"
-                            : "bg-[var(--bg-primary)] text-[var(--text-secondary)] hover:text-white hover:bg-[var(--bg-primary)] hover:ring-1 hover:ring-gray-600"
+                            ? "bg-[var(--accent)] text-[var(--text-primary)] font-semibold ring-2 ring-[var(--accent)] ring-offset-1 ring-offset-[var(--bg-secondary)]"
+                            : "bg-[var(--bg-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-primary)] hover:ring-1 hover:ring-gray-600"
                         }`}
                       >
                         {isSelected ? "✓ " : ""}{t.icon} {t.name}
@@ -326,7 +326,7 @@ export default function Home() {
                   type="text"
                   value={goalName}
                   onChange={(e) => setGoalName(e.target.value)}
-                  className="w-full bg-[var(--bg-primary)] border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[var(--accent)]"
+                  className="w-full bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
                   placeholder={
                     selectedTemplate !== null
                       ? templates[selectedTemplate].name.includes("读书")
@@ -347,7 +347,7 @@ export default function Home() {
                   type="number"
                   value={totalDays}
                   onChange={(e) => setTotalDays(Number(e.target.value))}
-                  className="w-full bg-[var(--bg-primary)] border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[var(--accent)]"
+                  className="w-full bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
                   min={3}
                   max={365}
                 />
@@ -375,7 +375,7 @@ export default function Home() {
                   cursor: isCreating || !goalName.trim() ? "not-allowed" : "pointer",
                   opacity: isCreating || !goalName.trim() ? 0.5 : 1,
                 }}
-                className="w-full font-semibold py-3 rounded-xl transition-all text-white bg-orange-500 hover:bg-orange-600 disabled:bg-gray-600"
+                className="w-full font-semibold py-3 rounded-xl transition-all text-[var(--text-primary)] bg-orange-500 hover:bg-orange-600 disabled:bg-gray-600"
               >
                 {isCreating ? "AI正在拆解目标..." : !goalName.trim() ? "请输入目标名称" : "开始逐日"}
               </button>
@@ -388,7 +388,7 @@ export default function Home() {
                     setCreatingStep("input");
                     setError("");
                   }}
-                  className="w-full py-2 text-sm text-[var(--text-secondary)] hover:text-white transition-colors"
+                  className="w-full py-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
                 >
                   重置
                 </button>
@@ -400,7 +400,7 @@ export default function Home() {
                     setShowCreateForm(false);
                     setCreatingStep("input");
                   }}
-                  className="w-full py-3 text-[var(--text-secondary)] hover:text-white transition-colors"
+                  className="w-full py-3 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
                 >
                   取消
                 </button>
@@ -447,13 +447,13 @@ export default function Home() {
           {/* Success card */}
           <div className="relative bg-gradient-to-br from-[var(--success)] to-green-600 px-8 py-6 rounded-2xl shadow-2xl checkin-success">
             <div className="text-6xl mb-2 animate-bounce">🎉</div>
-            <p className="text-2xl font-bold text-white">打卡成功！</p>
-            <p className="text-white/90 mt-1">🔥 连续 {activeGoal?.streak || 0} 天</p>
+            <p className="text-2xl font-bold text-[var(--text-primary)]">打卡成功！</p>
+            <p className="text-[var(--text-primary)]/90 mt-1">🔥 连续 {activeGoal?.streak || 0} 天</p>
             {activeGoal && activeGoal.streak >= 7 && (
               <p className="text-yellow-200 text-sm mt-2">💪 太棒了！继续保持！</p>
             )}
             {activeGoal && activeGoal.streak === 1 && (
-              <p className="text-white/80 text-sm mt-2">第一天！好的开始！</p>
+              <p className="text-[var(--text-primary)]/80 text-sm mt-2">第一天！好的开始！</p>
             )}
             {activeGoal && activeGoal.streak === 30 && (
               <p className="text-yellow-200 text-sm mt-2">🏆 30天连续！你是战神！</p>
@@ -532,7 +532,7 @@ export default function Home() {
                 onClick={() => setActiveGoalId(goal.id)}
                 className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap transition-colors ${
                   goal.id === activeGoalId
-                    ? "bg-[var(--accent)] text-white"
+                    ? "bg-[var(--accent)] text-[var(--text-primary)]"
                     : goal.status === "completed"
                     ? "bg-[var(--success)]/20 text-[var(--success)]"
                     : "bg-[var(--bg-primary)] text-[var(--text-secondary)]"
@@ -548,7 +548,7 @@ export default function Home() {
                   setTotalDays(20);
                   setShowCreateForm(true);
                 }}
-                className="px-3 py-1.5 rounded-full text-xs whitespace-nowrap bg-[var(--bg-primary)] text-[var(--text-secondary)] hover:text-white transition-colors"
+                className="px-3 py-1.5 rounded-full text-xs whitespace-nowrap bg-[var(--bg-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
               >
                 + 新目标
               </button>
@@ -592,7 +592,7 @@ export default function Home() {
                   <p className="font-semibold">恭喜完成目标！</p>
                   <button
                     onClick={() => setShowCompletionCard(true)}
-                    className="px-6 py-2 bg-[var(--accent)] text-white rounded-xl hover:bg-[var(--accent-light)] transition-colors"
+                    className="px-6 py-2 bg-[var(--accent)] text-[var(--text-primary)] rounded-xl hover:bg-[var(--accent-light)] transition-colors"
                   >
                     查看成就证书
                   </button>
@@ -620,7 +620,7 @@ export default function Home() {
                             disabled={task.completed}
                             className={`w-8 h-8 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${
                               task.completed
-                                ? "bg-[var(--success)] border-[var(--success)] text-white"
+                                ? "bg-[var(--success)] border-[var(--success)] text-[var(--text-primary)]"
                                 : "border-[var(--accent)] hover:bg-[var(--accent)]/20"
                             }`}
                           >
@@ -648,7 +648,7 @@ export default function Home() {
 
             {/* Next Day Preview */}
             {activeGoal.status !== "completed" && activeGoal.tasks.filter((t) => !t.completed).length > 1 && (
-              <div className="bg-[var(--bg-primary)] rounded-xl p-4 border border-gray-800">
+              <div className="bg-[var(--bg-primary)] rounded-xl p-4 border border-[var(--border)]">
                 <p className="text-xs text-[var(--text-secondary)] mb-2">明日预览</p>
                 <p className="text-sm">
                   {activeGoal.tasks.find((t) => !t.completed && t.date > new Date().toISOString().split("T")[0])?.task || "明天继续加油"}
@@ -699,9 +699,9 @@ export default function Home() {
                       key={task.day}
                       className={`aspect-square rounded-lg flex flex-col items-center justify-center text-xs ${
                         task.completed
-                          ? "bg-[var(--success)] text-white"
+                          ? "bg-[var(--success)] text-[var(--text-primary)]"
                           : isToday
-                          ? "bg-[var(--accent)] text-white"
+                          ? "bg-[var(--accent)] text-[var(--text-primary)]"
                           : "bg-[var(--bg-secondary)]"
                       }`}
                     >
@@ -739,7 +739,7 @@ export default function Home() {
                   <span
                     className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
                       task.completed
-                        ? "bg-[var(--success)] text-white"
+                        ? "bg-[var(--success)] text-[var(--text-primary)]"
                         : "bg-[var(--bg-primary)]"
                     }`}
                   >
@@ -785,7 +785,7 @@ export default function Home() {
                     {!user.todayCompleted && (
                       <button
                         onClick={() => handleUserCheckIn(user.id)}
-                        className="px-4 py-2 bg-[var(--accent)] text-white rounded-lg text-sm font-medium hover:bg-[var(--accent-light)] transition-colors"
+                        className="px-4 py-2 bg-[var(--accent)] text-[var(--text-primary)] rounded-lg text-sm font-medium hover:bg-[var(--accent-light)] transition-colors"
                       >
                         提醒打卡
                       </button>
@@ -813,7 +813,7 @@ export default function Home() {
                 重置所有数据
               </button>
 
-              <div className="pt-4 border-t border-gray-700">
+              <div className="pt-4 border-t border-[var(--border)]">
                 <p className="text-center text-[var(--text-secondary)] text-sm">
                   逐日 v0.2 · 内测版
                 </p>
@@ -835,7 +835,7 @@ export default function Home() {
       </main>
 
       {/* Bottom Tab Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-[var(--bg-secondary)] border-t border-gray-800">
+      <nav className="fixed bottom-0 left-0 right-0 bg-[var(--bg-secondary)]/80 backdrop-blur-xl border-t border-[var(--border)]" style={{ WebkitBackdropFilter: 'blur(20px)' }}>
         <div className="max-w-lg mx-auto flex">
           {[
             { id: "today" as Tab, label: "今日", icon: "📍" },

@@ -34,10 +34,10 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     <div className="fixed inset-0 bg-[var(--bg-primary)] flex flex-col z-50">
       {/* Skip button - top right, always visible */}
       {step < slides.length - 1 && (
-        <div className="absolute top-6 right-6 z-10">
+        <div className="absolute top-8 right-6 z-10">
           <button
             onClick={onComplete}
-            className="px-4 py-1.5 rounded-full text-sm text-[var(--text-secondary)] hover:text-white border border-gray-700 hover:border-gray-500 transition-colors"
+            className="px-4 py-1.5 rounded-full text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border)] hover:border-[var(--accent)] transition-colors"
           >
             跳过
           </button>
@@ -45,45 +45,46 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
       )}
 
       <div className="flex-1 flex flex-col items-center justify-center p-8">
-        <div className="text-center max-w-sm">
-          <div className="text-8xl mb-8 animate-bounce">{slides[step].icon}</div>
-          <h1 className="text-3xl font-bold text-white mb-2">{slides[step].title}</h1>
-          <p className="text-lg mb-4" style={{ color: "var(--accent)" }}>
+        <div className="text-center max-w-xs">
+          <div className="text-7xl mb-10 animate-bounce">{slides[step].icon}</div>
+          <h1 className="text-2xl font-semibold text-[var(--text-primary)] mb-3 tracking-tight">{slides[step].title}</h1>
+          <p className="text-base mb-4" style={{ color: "var(--accent)" }}>
             {slides[step].subtitle}
           </p>
-          <p className="text-sm text-[var(--text-secondary)]">
+          <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
             {slides[step].description}
           </p>
         </div>
       </div>
 
-      <div className="p-8 space-y-4">
-        {/* Progress dots */}
-        <div className="flex justify-center gap-2 mb-4">
+      <div className="p-8 space-y-4 max-w-sm mx-auto w-full">
+        {/* Progress dots - Apple style thin pills */}
+        <div className="flex justify-center gap-2 mb-6">
           {slides.map((_, i) => (
             <span
               key={i}
-              className={`w-2 h-2 rounded-full transition-all ${
+              className={`h-1 rounded-full transition-all ${
                 i === step
                   ? "w-6 bg-[var(--accent)]"
                   : i < step
-                  ? "bg-[var(--accent)]"
-                  : "bg-gray-600"
+                  ? "w-1.5 bg-[var(--accent)]"
+                  : "w-1.5 bg-[var(--text-tertiary)]"
               }`}
             />
           ))}
         </div>
 
-        {/* Action button */}
+        {/* Action button - Apple style, full width, no heavy shadow */}
         <button
           onClick={() => (step < slides.length - 1 ? setStep(step + 1) : onComplete())}
-          className="w-full py-4 bg-[var(--accent)] text-white font-semibold rounded-2xl hover:bg-[var(--accent-light)] transition-colors text-lg"
+          className="w-full py-3.5 bg-[var(--accent)] text-white font-medium rounded-xl hover:bg-[var(--accent-light)] transition-all text-base"
+          style={{ letterSpacing: '0.01em' }}
         >
           {step < slides.length - 1 ? "下一步" : "开始逐日"}
         </button>
 
         {/* Step counter */}
-        <p className="text-center text-xs text-[var(--text-secondary)]">
+        <p className="text-center text-xs text-[var(--text-tertiary)]">
           {step + 1} / {slides.length}
         </p>
       </div>
