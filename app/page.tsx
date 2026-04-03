@@ -8,6 +8,7 @@ import {
   clearGoals,
   createInitialGoal,
   checkIn,
+  useReviveCard,
   generateDefaultTasks,
   loadSupervisionUsers,
   updateUserCheckIn,
@@ -39,6 +40,10 @@ export default function Home() {
   // P2-7: Notification reminder
   const [reminderEnabled, setReminderEnabled] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+
+  // P1-3: Revive card
+  const [showRevivePrompt, setShowRevivePrompt] = useState(false);
+  const [missedDayIndex, setMissedDayIndex] = useState<number | null>(null);
 
   // P2-8: Export/Import
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -124,6 +129,18 @@ export default function Home() {
         new Notification('逐日', {
           body: '今天还没打卡，别断了自己的连续天数！',
         });
+      }
+    }
+
+    // P1-3: Check for missed days and show revive prompt
+    const loadedGoals = loadGoals();
+    const active = loadedGoals.find((g) => g.id === activeGoalId) || loadedGoals[0];
+    if (active) {
+      const today = new Date().toISOString().split('T')[0];
+      const missedIdx = active.tasks.findIndex((t) => !t.completed && t.date < today);
+      if (missedIdx !== -1 && active.reviveCards > 0) {
+        setMissedDayIndex(missedIdx);
+        setShowRevivePrompt(true);
       }
     }
   }, []);
@@ -705,6 +722,46 @@ export default function Home() {
                   : `${activeGoal.name} · 今天要做这些事`}
               </h2>
             </div>
+
+            {/* P1-3: Revive card prompt */}
+            {showRevivePrompt && missedDayIndex !== null && activeGoal.reviveCards > 0 && (
+              <div className="bg-gradient-to-r from-[var(--accent)]/10 to-[var(--accent)]/5 border border-[var(--accent)]/20 rounded-2xl p-4">
+                <div className="flex items-start gap-3">
+                  <span className="text-3xl">💳</span>
+                  <div className="flex-1">
+                    <p className="font-medium text-[var(--text-primary)]">有 {activeGoal.reviveCards} 张复活卡可用</p>
+                    <p className="text-sm text-[var(--text-secondary)] mt-1">
+                      你漏掉了 Day {activeGoal.tasks[missedDayIndex]?.day}，要补打卡吗？
+                    </p>
+                    <div className="flex gap-2 mt-3">
+                      <button
+                        onClick={() => {
+                          const revived = useReviveCard(activeGoal);
+                          if (revived) {
+                            const updatedGoals = goals.map((g) => g.id === revived.id ? revived : g);
+                            setGoals(updatedGoals);
+                            setShowRevivePrompt(false);
+                            setMissedDayIndex(null);
+                          }
+                        }}
+                        className="flex-1 py-2 bg-[var(--accent)] text-white text-sm font-medium rounded-xl hover:bg-[var(--accent-light)] transition-colors"
+                      >
+                        用一张补上
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowRevivePrompt(false);
+                          setMissedDayIndex(null);
+                        }}
+                        className="px-4 py-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                      >
+                        算了
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Today's Tasks */}
             <div className="space-y-3">

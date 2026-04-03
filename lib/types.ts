@@ -18,6 +18,7 @@ export interface Goal {
   currentDay: number;
   streak: number;
   longestStreak: number;
+  reviveCards: number;
   badges: Badge[];
   status: "active" | "completed";
   completedAt?: string;

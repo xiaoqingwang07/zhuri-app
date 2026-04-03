@@ -13,7 +13,12 @@ export function loadGoals(): Goal[] {
   const data = localStorage.getItem(GOALS_KEY);
   if (!data) return [];
   try {
-    return JSON.parse(data);
+    const goals: Goal[] = JSON.parse(data);
+    // Add reviveCards to goals that don't have it
+    return goals.map((g) => ({
+      ...g,
+      reviveCards: g.reviveCards ?? 1,
+    }));
   } catch {
     return [];
   }
@@ -48,6 +53,7 @@ export function createInitialGoal(
     currentDay: 1,
     streak: 0,
     longestStreak: 0,
+    reviveCards: 1,
     badges: [...DEFAULT_BADGES],
     status: "active",
   };
@@ -81,6 +87,10 @@ export function checkIn(goal: Goal, dayIndex: number): Goal {
   // Update longest streak
   const longestStreak = Math.max(goal.longestStreak, streak);
 
+  // Award revive card every 30 days
+  const newReviveCards = Math.floor((streak + 1) / 30) - Math.floor(goal.streak / 30);
+  const reviveCards = Math.max(goal.reviveCards, 0) + Math.max(0, newReviveCards);
+
   // Update current day
   const currentDayIndex = updatedTasks.findIndex((t) => !t.completed);
   const newCurrentDay = currentDayIndex === -1 ? goal.totalDays : currentDayIndex + 1;
@@ -95,10 +105,63 @@ export function checkIn(goal: Goal, dayIndex: number): Goal {
     tasks: updatedTasks,
     streak,
     longestStreak,
+    reviveCards,
     badges,
     currentDay: newCurrentDay,
     status,
     completedAt,
+  };
+}
+
+export function useReviveCard(goal: Goal): Goal | null {
+  if (goal.reviveCards <= 0) return null;
+
+  const today = new Date().toISOString().split("T")[0];
+
+  // Find first incomplete past task (missed day)
+  const missedIndex = goal.tasks.findIndex(
+    (t) => !t.completed && t.date < today
+  );
+
+  if (missedIndex === -1) return null; // No missed days
+
+  // Mark as completed
+  const updatedTasks = [...goal.tasks];
+  updatedTasks[missedIndex] = {
+    ...updatedTasks[missedIndex],
+    completed: true,
+    completedAt: new Date().toISOString(),
+  };
+
+  // Recalculate streak from beginning
+  let streak = 0;
+  for (let i = 0; i < updatedTasks.length; i++) {
+    if (updatedTasks[i].completed) {
+      streak++;
+    } else {
+      break;
+    }
+  }
+
+  const longestStreak = Math.max(goal.longestStreak, streak);
+
+  // Update badges
+  const badges = goal.badges.map((b) => {
+    if (b.unlockedAt) return b;
+    if (streak >= b.daysRequired) {
+      return { ...b, unlockedAt: new Date().toISOString() };
+    }
+    return b;
+  });
+
+  return {
+    ...goal,
+    tasks: updatedTasks,
+    streak,
+    longestStreak,
+    badges,
+    reviveCards: goal.reviveCards - 1,
+    status: updatedTasks.every((t) => t.completed) ? "completed" : goal.status,
   };
 }
 
