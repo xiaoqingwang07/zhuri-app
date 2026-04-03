@@ -1,36 +1,82 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 逐日 — AI 目标拆解 + 社交监督打卡
 
-## Getting Started
+> 你敢想，我敢拆——每天离目标近一点
 
-First, run the development server:
+逐日是一款 AI 驱动的目标执行工具。把大目标交给 AI，拆成每天触手可及的小任务，朋友圈陪你一起坚持。
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+**测试地址：** https://xiaoqingwang07.github.io/zhuri-app/
+
+---
+
+## 核心功能
+
+### 🎯 AI 智能拆解
+输入目标（比如"读完《人类简史》"），AI 在 15 秒内拆解为每日任务。不满意可以重新生成，确认后再开始执行。
+
+### 🔥 连续打卡
+每天打卡，连续徽章激励（🌱3天 → 🔥7天 → ⭐14天 → 🏆20天）。打卡动画有彩片惊喜。
+
+### 💳 复活卡
+漏了一天也不怕——新目标送 1 张复活卡，可以补打卡。连续 30 天再奖励一张。
+
+### 👥 社交监督
+监督团里可以看到"其他人"今天的打卡状态。戳一下TA，TA会收到提醒。
+
+### 📊 进度可视化
+日历总览显示整体进度、完成率、近7天统计，以及"领先/落后"计划对比。
+
+### 🌙 主题切换
+浅色 / 深色 / 跟随系统，三档手动切换。
+
+### 📤 数据导出
+所有数据可导出为 JSON 备份，换设备不丢数据。
+
+---
+
+## 截图
+
+> 主页暗色设计 + 橙色点缀
+
+```
+[截图待补]
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 技术栈
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **前端：** Next.js 14 + TypeScript + Tailwind CSS
+- **状态管理：** React useState + localStorage
+- **AI：** Siliconflow API（DeepSeek-V3）
+- **部署：** GitHub Pages（静态导出）
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## 开发
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+# 本地开发
+npm install
+npm run dev
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+# 构建
+npm run build
+```
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 产品理念
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+逐日的核心问题是：**大目标太大，执行力跟不上，坚持不下去。**
+
+解决方案：
+1. AI 拆解 → 降低规划门槛
+2. 每日打卡 → 制造损失厌恶
+3. 复活卡 → 给了退路，不容易直接放弃
+4. 社交监督 → 利用群体压力维持动力
+
+---
+
+## License
+
+MIT
