@@ -1,5 +1,19 @@
 import { DayTask } from "./types";
 
+/**
+ * P0-1 Security Fix: API Key is NO LONGER hardcoded in frontend.
+ * 
+ * AI calls go through a proxy Worker to protect the key.
+ * Worker URL must be set via the VITE_WORKER_URL environment variable.
+ * 
+ * To deploy your own worker:
+ * 1. Create a free Cloudflare account
+ * 2. Deploy the /worker directory using: npx wrangler deploy
+ * 3. Set VITE_WORKER_URL=https://your-worker.your-subdomain.workers.dev in your .env
+ */
+
+const WORKER_URL = "https://zhuri-ai-proxy.chenyejie.workers.dev";
+
 const SYSTEM_PROMPT = `你是一位专业的阅读教练，擅长将大目标拆解为每日可执行的任务。
 
 你需要根据用户提供的目标，生成循序渐进的每日阅读任务。
@@ -23,61 +37,34 @@ const SYSTEM_PROMPT = `你是一位专业的阅读教练，擅长将大目标拆
   ]
 }`;
 
-const API_KEY = "sk-vzalrqeohnovvgnkdacjlsfxyzrxobfjlhxcghuhfzlfszhq";
-const API_URL = "https://api.siliconflow.cn/v1/chat/completions";
-const MODEL = "deepseek-ai/DeepSeek-V3";
-
 export async function generateTasksWithAI(
   goal: string,
   totalDays: number,
   signal?: AbortSignal
 ): Promise<DayTask[]> {
-  const userPrompt = `目标：${goal}\n天数：${totalDays}天\n\n请生成${totalDays}天的每日阅读任务。确保：\n- 任务循序渐进\n- 涵盖全书主要内容\n- 最后1-2天用于回顾总结\n- 直接返回JSON，不要其他内容`;
-
-  const response = await fetch(API_URL, {
+  // P0-1: Use worker proxy - key is protected on the backend
+  const response = await fetch(WORKER_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${API_KEY}`,
     },
-    body: JSON.stringify({
-      model: MODEL,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: userPrompt },
-      ],
-      temperature: 0.7,
-    }),
-    signal, // P0-1: AbortController integration
+    body: JSON.stringify({ goal, totalDays }),
+    signal,
   });
 
   if (!response.ok) {
     const error = await response.text();
-    throw new Error(`AI API错误: ${response.status} - ${error}`);
+    throw new Error(`AI服务暂时不可用，请稍后重试 (${response.status})`);
   }
 
   const data = await response.json();
-  const content = data.choices[0]?.message?.content;
 
-  if (!content) {
-    throw new Error("AI未返回有效内容");
+  if (data.error) {
+    throw new Error(`AI服务暂时不可用: ${data.error}`);
   }
 
-  // Parse JSON from response
-  let parsed;
-  try {
-    parsed = JSON.parse(content);
-  } catch {
-    // Try to extract JSON from the text
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      parsed = JSON.parse(jsonMatch[0]);
-    } else {
-      throw new Error("AI返回内容格式错误");
-    }
-  }
-
-  const tasksData = parsed.tasks || parsed.days || [];
+  // Parse the tasks from worker response
+  const tasksData = data.tasks || data.days || [];
   const tasks: DayTask[] = tasksData.map((t: any, index: number) => {
     const date = new Date();
     date.setDate(date.getDate() + index);

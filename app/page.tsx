@@ -870,7 +870,37 @@ export default function Home() {
                 {activeGoal.tasks.filter((t) => t.completed).length} / {activeGoal.tasks.length} 天完成
               </span>
             </div>
-            
+
+            {/* P1-2: Overall progress stats */}
+            {(() => {
+              const completed = activeGoal.tasks.filter((t) => t.completed).length;
+              const total = activeGoal.tasks.length;
+              const percent = Math.round((completed / total) * 100);
+              const today = new Date().toISOString().split("T")[0];
+              const weekCompleted = activeGoal.tasks.filter((t) => t.completed && t.date <= today).length;
+              const weekTotal = Math.min(7, total);
+              return (
+                <div className="bg-[var(--bg-card)] rounded-2xl p-4 border border-[var(--border)]" style={{ boxShadow: 'var(--shadow-sm)' }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm text-[var(--text-secondary)]">📊 整体进度</span>
+                    <span className="text-sm font-semibold text-[var(--accent)]">{percent}% 完成</span>
+                  </div>
+                  {/* Progress bar */}
+                  <div className="h-2 bg-[var(--bg-primary)] rounded-full overflow-hidden mb-3">
+                    <div
+                      className="h-full bg-[var(--accent)] rounded-full transition-all duration-500"
+                      style={{ width: `${percent}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs text-[var(--text-secondary)]">
+                    <span>🔥 连续 {activeGoal.streak} 天</span>
+                    <span>本周 {Math.min(weekCompleted, 7)}/{weekTotal} 天</span>
+                    <span>剩余 {total - completed} 天</span>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Recent 7 days */}
             <div>
               <h3 className="text-sm text-[var(--text-secondary)] mb-2">最近7天</h3>
