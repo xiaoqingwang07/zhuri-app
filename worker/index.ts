@@ -4,7 +4,6 @@
  */
 
 const SILICONFLOW_API_URL = "https://api.siliconflow.cn/v1/chat/completions";
-const API_KEY = "sk-rqHwuVjIKJbbWNPhnJQKPxKoPIWjQTFPqoGkxAjfw2uKo2dP"; // 后端专用key
 
 const SYSTEM_PROMPT = `你是一个目标拆解助手。用户会给你一个目标名称和总天数，你要把这个目标拆成每天的小任务。
 
@@ -20,7 +19,8 @@ const SYSTEM_PROMPT = `你是一个目标拆解助手。用户会给你一个目
 返回纯JSON，不要有其他内容。`;
 
 export default {
-  async fetch(request: Request): Promise<Response> {
+  async fetch(request: Request, env: { API_KEY: string }): Promise<Response> {
+    const API_KEY = env.API_KEY;
     // Only allow POST
     if (request.method !== "POST") {
       return new Response(JSON.stringify({ error: "Method not allowed" }), {

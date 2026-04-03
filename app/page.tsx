@@ -383,6 +383,10 @@ export default function Home() {
                     还有 {pendingTasks.length - 5} 天任务...
                   </p>
                 )}
+                {/* P2-7: AI task manual hint */}
+                <p className="text-xs text-center text-[var(--text-tertiary)]">
+                  任务不满意？点"重新生成"换个方式，或者直接开始——之后还可以在任务详情里单独调整
+                </p>
               </div>
               {/* Action buttons */}
               <div className="space-y-2">
@@ -1118,7 +1122,7 @@ export default function Home() {
               </div>
               {/* iOS tip */}
               <p className="text-xs text-[var(--text-tertiary)] mt-2">
-                💡 iOS用户：Safari打开本页面 → 分享按钮 → 添加至主屏幕 → 完成后可在主屏幕图标直接接收通知
+                💡 iOS用户：Safari打开 → 分享 → 添加至主屏幕 → 系统会询问是否允许通知授权
               </p>
             </div>
 
