@@ -877,13 +877,33 @@ export default function Home() {
               const total = activeGoal.tasks.length;
               const percent = Math.round((completed / total) * 100);
               const today = new Date().toISOString().split("T")[0];
-              const weekCompleted = activeGoal.tasks.filter((t) => t.completed && t.date <= today).length;
-              const weekTotal = Math.min(7, total);
+
+              // Fix: count only last 7 days (not all-time)
+              const sevenDaysAgo = new Date();
+              sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+              const weekCompleted = activeGoal.tasks.filter((t) => {
+                if (!t.completed || !t.completedAt) return false;
+                const completedDate = new Date(t.completedAt);
+                return completedDate >= sevenDaysAgo && completedDate <= new Date();
+              }).length;
+
+              // Schedule comparison: expected progress vs actual
+              const startDate = new Date(activeGoal.startDate);
+              const todayDate = new Date();
+              const daysElapsed = Math.max(1, Math.floor((todayDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+              const expectedPercent = Math.round((daysElapsed / total) * 100);
+              const ahead = completed / total > (daysElapsed / total);
+              const behind = completed / total < (daysElapsed / total) - 0.05;
+
               return (
                 <div className="bg-[var(--bg-card)] rounded-2xl p-4 border border-[var(--border)]" style={{ boxShadow: 'var(--shadow-sm)' }}>
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-sm text-[var(--text-secondary)]">📊 整体进度</span>
-                    <span className="text-sm font-semibold text-[var(--accent)]">{percent}% 完成</span>
+                    <span className="text-sm font-semibold text-[var(--accent)]">
+                      {percent}% 完成
+                      {ahead && <span className="ml-1 text-[var(--success)]">· 领先</span>}
+                      {behind && <span className="ml-1 text-[var(--danger)]">· 落后</span>}
+                    </span>
                   </div>
                   {/* Progress bar */}
                   <div className="h-2 bg-[var(--bg-primary)] rounded-full overflow-hidden mb-3">
@@ -894,7 +914,7 @@ export default function Home() {
                   </div>
                   <div className="flex justify-between text-xs text-[var(--text-secondary)]">
                     <span>🔥 连续 {activeGoal.streak} 天</span>
-                    <span>本周 {Math.min(weekCompleted, 7)}/{weekTotal} 天</span>
+                    <span>近7天 {weekCompleted} 天</span>
                     <span>剩余 {total - completed} 天</span>
                   </div>
                 </div>
@@ -1084,6 +1104,10 @@ export default function Home() {
                   </button>
                 )}
               </div>
+              {/* iOS tip */}
+              <p className="text-xs text-[var(--text-tertiary)] mt-2">
+                💡 iOS用户：Safari中打开 → 分享按钮 → 添加到主屏幕
+              </p>
             </div>
 
             {/* P2-8: Data Export/Import */}
