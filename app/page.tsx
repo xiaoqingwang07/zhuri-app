@@ -340,6 +340,53 @@ export default function Home() {
                 <span className={loadingCountdown <= 4 ? "text-[var(--accent)] font-medium" : ""}>③ 完成</span>
               </div>
             </div>
+          ) : creatingStep === "confirm" && pendingTasks ? (
+            /* P0-2: AI task confirmation step */
+            <div className="space-y-4">
+              <div className="text-center">
+                <div className="text-4xl mb-2">✨</div>
+                <p className="font-semibold">帮你拆好了！</p>
+                <p className="text-sm text-[var(--text-secondary)] mt-1">
+                  看看这几天的任务，有不合适的可以改
+                </p>
+              </div>
+              {/* Task preview */}
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {pendingTasks.slice(0, 5).map((task) => (
+                  <div key={task.day} className="bg-[var(--bg-card)] rounded-xl px-4 py-3 border border-[var(--border)] text-sm">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs px-2 py-0.5 bg-[var(--accent-subtle)] rounded text-[var(--accent)]">Day {task.day}</span>
+                      <span className="text-xs text-[var(--text-tertiary)]">{task.pages}</span>
+                    </div>
+                    <p className="text-[var(--text-primary)]">{task.task}</p>
+                  </div>
+                ))}
+                {pendingTasks.length > 5 && (
+                  <p className="text-xs text-center text-[var(--text-tertiary)]">
+                    还有 {pendingTasks.length - 5} 天任务...
+                  </p>
+                )}
+              </div>
+              {/* Action buttons */}
+              <div className="space-y-2">
+                <button
+                  onClick={confirmTasks}
+                  className="w-full py-3 bg-[var(--accent)] text-white font-medium rounded-xl hover:bg-[var(--accent-light)] transition-colors"
+                >
+                  就这些了，开始执行 💪
+                </button>
+                <button
+                  onClick={() => {
+                    // Re-generate with AI
+                    setCreatingStep("input");
+                    setPendingTasks(null);
+                  }}
+                  className="w-full py-2.5 text-sm text-[var(--text-secondary)] border border-[var(--border)] rounded-xl hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors"
+                >
+                  重新生成
+                </button>
+              </div>
+            </div>
           ) : (
             <div className="bg-[var(--bg-secondary)] rounded-2xl p-6 space-y-4">
               {/* Clear data button */}
