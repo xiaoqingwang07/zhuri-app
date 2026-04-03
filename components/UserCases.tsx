@@ -66,27 +66,27 @@ export default function UserCases() {
   useEffect(() => {
     const interval = setInterval(() => {
       setActiveIndex((prev) => (prev + 1) % DEMO_CASES.length);
-    }, 4000);
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm text-[var(--text-secondary)]">看看他们怎么做到的</h3>
+        <h3 className="text-sm text-[var(--text-secondary)]">他们都在悄悄变好</h3>
         <div className="flex gap-1">
           {DEMO_CASES.map((_, i) => (
             <span
               key={i}
-              className={`w-1.5 h-1.5 rounded-full transition-all ${
-                i === activeIndex ? "w-4 bg-[var(--accent)]" : "bg-gray-600"
+              className={`h-1 rounded-full transition-all ${
+                i === activeIndex ? "w-4 bg-[var(--accent)]" : "w-1.5 bg-[var(--text-tertiary)]"
               }`}
             />
           ))}
         </div>
       </div>
 
-      <div className="relative h-[140px] overflow-hidden">
+      <div className="relative h-[130px] overflow-hidden">
         {DEMO_CASES.map((userCase, i) => {
           const offset = (i - activeIndex + DEMO_CASES.length) % DEMO_CASES.length;
           const isActive = offset === 0;
@@ -104,25 +104,25 @@ export default function UserCases() {
                 zIndex: DEMO_CASES.length - Math.abs(offset),
               }}
             >
-              <div className="bg-[var(--bg-secondary)] rounded-xl p-4 h-full">
-                <div className="flex items-center gap-3 mb-3">
+              <div className="bg-[var(--bg-card)] rounded-2xl p-4 h-full border border-[var(--border)]" style={{ boxShadow: 'var(--shadow-sm)' }}>
+                <div className="flex items-center gap-3 mb-2">
                   <span className="text-3xl">{userCase.avatar}</span>
-                  <div>
-                    <p className="font-semibold">{userCase.name}</p>
+                  <div className="flex-1">
+                    <p className="font-medium text-[var(--text-primary)]">{userCase.name}</p>
                     <p className="text-xs text-[var(--text-secondary)]">
-                      🔥 连续 {userCase.streak} 天
+                      🔥 已坚持 {userCase.streak} 天
                     </p>
                   </div>
                 </div>
-                <p className="text-sm mb-2 line-clamp-1">{userCase.goal}</p>
+                <p className="text-sm text-[var(--text-secondary)] mb-2 line-clamp-1">"{userCase.goal}"</p>
                 <div className="flex items-center justify-between">
                   <div className="flex gap-1">
                     {userCase.badges.map((badge, j) => (
-                      <span key={j} className="text-lg">{badge}</span>
+                      <span key={j} className="text-sm">{badge}</span>
                     ))}
                   </div>
-                  <span className="text-xs text-[var(--text-secondary)]">
-                    坚持 {userCase.duration} 天
+                  <span className="text-xs text-[var(--text-tertiary)]">
+                    {userCase.duration}天计划
                   </span>
                 </div>
               </div>
@@ -131,8 +131,8 @@ export default function UserCases() {
         })}
       </div>
 
-      <p className="text-xs text-center text-[var(--text-secondary)]">
-        更多真实案例即将上线
+      <p className="text-xs text-center text-[var(--text-tertiary)]">
+        你的故事也可以在这里
       </p>
     </div>
   );

@@ -110,7 +110,7 @@ export default function Home() {
       return;
     }
     if (!goalName.trim()) {
-      setError("请输入目标名称");
+      setError("告诉我你的目标是什么？");
       return;
     }
     if (totalDays < 3) {
@@ -244,8 +244,8 @@ export default function Home() {
             <div className="bg-[var(--bg-secondary)] rounded-2xl p-8 text-center space-y-4">
               <div className="text-5xl animate-bounce">🤖</div>
               <div>
-                <p className="font-semibold">AI 正在拆解目标...</p>
-                <p className="text-sm text-[var(--text-secondary)] mt-1">根据你的目标规划每日任务</p>
+                <p className="font-semibold">正在帮你拆解目标...</p>
+                <p className="text-sm text-[var(--text-secondary)] mt-1">稍等，马上就好</p>
               </div>
               {/* Progress bar - P1-3 */}
               <div className="space-y-1">
@@ -377,7 +377,7 @@ export default function Home() {
                 }}
                 className="w-full font-semibold py-3 rounded-xl transition-all text-[var(--text-primary)] bg-orange-500 hover:bg-orange-600 disabled:bg-gray-600"
               >
-                {isCreating ? "AI正在拆解目标..." : !goalName.trim() ? "请输入目标名称" : "开始逐日"}
+                {isCreating ? "AI正在拆解目标..." : !goalName.trim() ? "先告诉我你的目标" : "开始逐日"}
               </button>
 
               {/* Reset button if stuck */}
@@ -444,19 +444,21 @@ export default function Home() {
               />
             ))}
           </div>
-          {/* Success card */}
+          {/* Success card - human voice */}
           <div className="relative bg-gradient-to-br from-[var(--success)] to-green-600 px-8 py-6 rounded-2xl shadow-2xl checkin-success">
             <div className="text-6xl mb-2 animate-bounce">🎉</div>
-            <p className="text-2xl font-bold text-[var(--text-primary)]">打卡成功！</p>
-            <p className="text-[var(--text-primary)]/90 mt-1">🔥 连续 {activeGoal?.streak || 0} 天</p>
+            <p className="text-2xl font-bold text-white">
+              {activeGoal && activeGoal.streak === 1 ? "完成啦！" : "又搞定一天！"}
+            </p>
+            <p className="text-white/90 mt-1">🔥 连续 {activeGoal?.streak || 0} 天</p>
             {activeGoal && activeGoal.streak >= 7 && (
-              <p className="text-yellow-200 text-sm mt-2">💪 太棒了！继续保持！</p>
+              <p className="text-yellow-200 text-sm mt-2">💪 {activeGoal.streak}天了，你不是在坚持，是在享受</p>
             )}
             {activeGoal && activeGoal.streak === 1 && (
-              <p className="text-[var(--text-primary)]/80 text-sm mt-2">第一天！好的开始！</p>
+              <p className="text-white/80 text-sm mt-2">好的开始！明天继续 👊</p>
             )}
             {activeGoal && activeGoal.streak === 30 && (
-              <p className="text-yellow-200 text-sm mt-2">🏆 30天连续！你是战神！</p>
+              <p className="text-yellow-200 text-sm mt-2">🏆 30天！说真的，我很为你骄傲</p>
             )}
           </div>
         </div>
@@ -562,21 +564,26 @@ export default function Home() {
         {/* Today Tab */}
         {activeTab === "today" && activeGoal && (
           <div className="space-y-6 slide-up">
-            {/* Today Info */}
+            {/* Today Info - Human greeting */}
             <div className="text-center py-4">
               <p className="text-[var(--text-secondary)] text-sm">
-                {new Date().toLocaleDateString("zh-CN", {
-                  weekday: "long",
-                  month: "long",
-                  day: "numeric",
-                })}
+                {(() => {
+                  const hour = new Date().getHours();
+                  if (hour < 6) return "夜深了，早点休息 🛋";
+                  if (hour < 9) return "早上好！☀️ 今天也要加油";
+                  if (hour < 12) return "上午好，状态不错 🌤️";
+                  if (hour < 14) return "中午好，吃饱了吗 🍜";
+                  if (hour < 18) return "下午好，别摸鱼哦 🤫";
+                  if (hour < 21) return "晚上好，夜深人静正适合 🍵";
+                  return "夜深了 🛋";
+                })()}
               </p>
-              <h2 className="text-xl font-bold mt-1">
+              <h2 className="text-xl font-semibold mt-2 text-[var(--text-primary)]">
                 {completedToday === todayTasks.length && todayTasks.length > 0
-                  ? "🎉 今日已完成！"
+                  ? "今天全做完了，厉害！🎉"
                   : activeGoal.status === "completed"
-                  ? "✅ 目标已完成"
-                  : `今日任务 (${completedToday}/${todayTasks.length})`}
+                  ? "目标完成，你真棒 🏆"
+                  : `${activeGoal.name} · 今天要做这些事`}
               </h2>
             </div>
 
@@ -602,7 +609,7 @@ export default function Home() {
                   {/* Check-in hint - shown only when tasks exist, none completed, and hint not yet shown */}
                   {completedToday === 0 && !localStorage.getItem("zhuri_checkin_hint_shown") && (
                     <div className="bg-[var(--accent)]/10 border border-[var(--accent)]/30 rounded-xl px-4 py-3 text-sm text-[var(--accent)]">
-                      👆 点击左侧圆形按钮完成打卡
+                      👆 点这里打个卡，证明今天没偷懒 😏
                     </div>
                   )}
                   {todayTasks.map((task, idx) => {
@@ -761,8 +768,8 @@ export default function Home() {
         {activeTab === "supervision" && (
           <div className="space-y-4 slide-up">
             <div className="text-center py-4">
-              <h2 className="text-xl font-bold">👥 监督广场</h2>
-              <p className="text-sm text-[var(--text-secondary)]">互相监督，共同进步</p>
+              <h2 className="text-xl font-bold">👥 监督团</h2>
+              <p className="text-sm text-[var(--text-secondary)]">一个人走得快，一群人走得远</p>
               <button
                 onClick={() => setShowInvite(true)}
                 className="mt-2 px-4 py-2 bg-[var(--accent)]/20 text-[var(--accent)] rounded-lg text-sm hover:bg-[var(--accent)]/30 transition-colors"
@@ -787,7 +794,7 @@ export default function Home() {
                         onClick={() => handleUserCheckIn(user.id)}
                         className="px-4 py-2 bg-[var(--accent)] text-[var(--text-primary)] rounded-lg text-sm font-medium hover:bg-[var(--accent-light)] transition-colors"
                       >
-                        提醒打卡
+                        戳一下TA
                       </button>
                     )}
                     {user.todayCompleted && (
@@ -805,16 +812,16 @@ export default function Home() {
           <div className="space-y-4 slide-up">
             <h2 className="text-lg font-bold">⚙️ 设置</h2>
 
-            <div className="bg-[var(--bg-secondary)] rounded-xl p-4 space-y-4">
+            <div className="bg-[var(--bg-card)] rounded-2xl p-4 space-y-4 border border-[var(--border)]" style={{ boxShadow: 'var(--shadow-sm)' }}>
               <button
                 onClick={handleReset}
-                className="w-full py-3 bg-[var(--danger)]/20 text-[var(--danger)] rounded-xl font-medium hover:bg-[var(--danger)]/30 transition-colors"
+                className="w-full py-3 bg-[var(--danger)]/10 text-[var(--danger)] rounded-xl font-medium hover:bg-[var(--danger)]/20 transition-colors"
               >
-                重置所有数据
+                重新开始
               </button>
 
               <div className="pt-4 border-t border-[var(--border)]">
-                <p className="text-center text-[var(--text-secondary)] text-sm">
+                <p className="text-center text-[var(--text-tertiary)] text-sm">
                   逐日 v0.2 · 内测版
                 </p>
                 <p className="text-center text-[var(--text-secondary)] text-xs mt-1">
