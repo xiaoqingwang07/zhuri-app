@@ -121,7 +121,9 @@ export function generateDefaultTasks(totalDays: number, bookName: string): DayTa
       const startPage = i * pagesPerDay + 1;
       const endPage = Math.min((i + 1) * pagesPerDay, 300);
       pages = `P${startPage}-P${endPage}`;
-      task = `阅读《${bookName}》第${startPage}-${endPage}页`;
+      // Strip 《》 from bookName to avoid double brackets like 《读完《人类简史》》
+      const cleanName = bookName.replace(/《|》/g, "");
+      task = `阅读《${cleanName}》第${startPage}-${endPage}页`;
       type = "reading";
     } else if (i === totalDays - 2) {
       // Review day
