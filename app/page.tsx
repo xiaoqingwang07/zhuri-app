@@ -392,16 +392,26 @@ export default function Home() {
                 >
                   就这些了，开始执行 💪
                 </button>
-                <button
-                  onClick={() => {
-                    // Re-generate with AI
-                    setCreatingStep("input");
-                    setPendingTasks(null);
-                  }}
-                  className="w-full py-2.5 text-sm text-[var(--text-secondary)] border border-[var(--border)] rounded-xl hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors"
-                >
-                  重新生成
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setCreatingStep("input");
+                      setPendingTasks(null);
+                    }}
+                    className="flex-1 py-2.5 text-sm text-[var(--text-secondary)] border border-[var(--border)] rounded-xl hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors"
+                  >
+                    重新生成
+                  </button>
+                  <button
+                    onClick={() => {
+                      // Just go back to edit name/days, keep pending tasks
+                      setCreatingStep("input");
+                    }}
+                    className="flex-1 py-2.5 text-sm text-[var(--text-secondary)] border border-[var(--border)] rounded-xl hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors"
+                  >
+                    调整天数
+                  </button>
+                </div>
               </div>
             </div>
           ) : (
@@ -908,7 +918,9 @@ export default function Home() {
                   {/* Progress bar */}
                   <div className="h-2 bg-[var(--bg-primary)] rounded-full overflow-hidden mb-3">
                     <div
-                      className="h-full bg-[var(--accent)] rounded-full transition-all duration-500"
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        ahead ? "bg-[var(--success)]" : behind ? "bg-[var(--danger)]" : "bg-[var(--accent)]"
+                      }`}
                       style={{ width: `${percent}%` }}
                     />
                   </div>
@@ -1106,7 +1118,7 @@ export default function Home() {
               </div>
               {/* iOS tip */}
               <p className="text-xs text-[var(--text-tertiary)] mt-2">
-                💡 iOS用户：Safari中打开 → 分享按钮 → 添加到主屏幕
+                💡 iOS用户：Safari打开本页面 → 分享按钮 → 添加至主屏幕 → 完成后可在主屏幕图标直接接收通知
               </p>
             </div>
 
