@@ -243,15 +243,26 @@ export default function Home() {
               <div>
                 <p className="font-semibold">AI 正在拆解目标...</p>
                 <p className="text-sm text-[var(--text-secondary)] mt-1">根据你的目标规划每日任务</p>
-                {/* P2-1: Loading countdown */}
-                <p className="text-xs text-[var(--text-secondary)] mt-2">
+              </div>
+              {/* Progress bar - P1-3 */}
+              <div className="space-y-1">
+                <div className="h-2 bg-[var(--bg-primary)] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-[var(--accent)] rounded-full transition-all duration-1000 ease-linear"
+                    style={{ width: `${((15 - loadingCountdown) / 15) * 100}%` }}
+                  />
+                </div>
+                <p className="text-xs text-[var(--text-secondary)]">
                   预计等待 {loadingCountdown}s 内完成
                 </p>
               </div>
-              <div className="flex justify-center gap-1">
-                <span className="w-2 h-2 bg-[var(--accent)] rounded-full animate-pulse"></span>
-                <span className="w-2 h-2 bg-[var(--accent)] rounded-full animate-pulse delay-75"></span>
-                <span className="w-2 h-2 bg-[var(--accent)] rounded-full animate-pulse delay-150"></span>
+              {/* Step indicator */}
+              <div className="flex items-center justify-center gap-2 text-xs text-[var(--text-secondary)]">
+                <span className={loadingCountdown <= 12 ? "text-[var(--accent)] font-medium" : ""}>① 分析目标</span>
+                <span className="text-gray-600">→</span>
+                <span className={loadingCountdown <= 8 ? "text-[var(--accent)] font-medium" : ""}>② 生成任务</span>
+                <span className="text-gray-600">→</span>
+                <span className={loadingCountdown <= 4 ? "text-[var(--accent)] font-medium" : ""}>③ 完成</span>
               </div>
             </div>
           ) : (
@@ -670,21 +681,24 @@ export default function Home() {
             <div>
               <h3 className="text-sm text-[var(--text-secondary)] mb-2">最近7天</h3>
               <div className="grid grid-cols-7 gap-1">
-                {activeGoal.tasks.slice(0, 7).map((task) => (
-                  <div
-                    key={task.day}
-                    className={`aspect-square rounded-lg flex flex-col items-center justify-center text-xs ${
-                      task.completed
-                        ? "bg-[var(--success)] text-white"
-                        : task.date === new Date().toISOString().split("T")[0]
-                        ? "bg-[var(--accent)] text-white"
-                        : "bg-[var(--bg-secondary)]"
-                    }`}
-                  >
-                    <span className="font-bold">{task.day}</span>
-                    <span>{task.completed ? "✓" : ""}</span>
-                  </div>
-                ))}
+                {activeGoal.tasks.slice(0, 7).map((task) => {
+                  const isToday = task.date === new Date().toISOString().split("T")[0];
+                  return (
+                    <div
+                      key={task.day}
+                      className={`aspect-square rounded-lg flex flex-col items-center justify-center text-xs ${
+                        task.completed
+                          ? "bg-[var(--success)] text-white"
+                          : isToday
+                          ? "bg-[var(--accent)] text-white"
+                          : "bg-[var(--bg-secondary)]"
+                      }`}
+                    >
+                      <span className="font-bold">{task.day}</span>
+                      <span>{task.completed ? "✓" : ""}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
