@@ -161,19 +161,69 @@ const SYSTEM_PROMPT = `你是目标拆解教练。用户会给你一个目标和
 day从1开始，天数与用户指定一致`;
 
 export default {
-  async fetch(request: Request, env: { API_KEY: string }): Promise<Response> {
+  async fetch(request: Request, env: { API_KEY: string; ZHURI_DB: KVNamespace }): Promise<Response> {
+    const url = new URL(request.url);
+    
+    // CORS Headers for all responses
+    const corsHeaders = {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, x-device-id",
+    };
+
+    // Handle Preflight
+    if (request.method === "OPTIONS") {
+      return new Response(null, { headers: corsHeaders });
+    }
+
+    const deviceId = request.headers.get("x-device-id");
+
+    // --- Endpoint: Sync Data (Save) ---
+    if (url.pathname === "/sync" && (request.method === "POST" || request.method === "PUT")) {
+      if (!deviceId) {
+        return new Response(JSON.stringify({ error: "Missing x-device-id header" }), { 
+          status: 400, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        });
+      }
+      try {
+        const data = await request.text();
+        // Validation: Expecting JSON string
+        JSON.parse(data); 
+        await env.ZHURI_DB.put(`user:${deviceId}`, data, {
+          metadata: { updatedAt: new Date().toISOString() }
+        });
+        return new Response(JSON.stringify({ success: true, timestamp: new Date().toISOString() }), { 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        });
+      } catch (e: any) {
+        return new Response(JSON.stringify({ error: "Invalid data format or KV error" }), { 
+          status: 500, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        });
+      }
+    }
+
+    // --- Endpoint: Load Data (Get) ---
+    if (url.pathname === "/get" && request.method === "GET") {
+      if (!deviceId) {
+        return new Response(JSON.stringify({ error: "Missing x-device-id header" }), { 
+          status: 400, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        });
+      }
+      const data = await env.ZHURI_DB.get(`user:${deviceId}`);
+      return new Response(data || "{}", { 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      });
+    }
+
+    // --- Endpoint: AI Generate (Default) ---
     const API_KEY = env.API_KEY;
     if (!API_KEY) {
       return new Response(JSON.stringify({ error: "API Key not configured" }), {
         status: 500,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    if (request.method !== "POST") {
-      return new Response(JSON.stringify({ error: "Method not allowed" }), {
-        status: 405,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -184,7 +234,7 @@ export default {
       if (!goal || !totalDays) {
         return new Response(JSON.stringify({ error: "Missing goal or totalDays" }), {
           status: 400,
-          headers: { "Content-Type": "application/json" },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
@@ -210,7 +260,7 @@ export default {
         const errorText = await response.text();
         return new Response(JSON.stringify({ error: "AI API error", details: errorText }), {
           status: response.status,
-          headers: { "Content-Type": "application/json" },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
@@ -231,19 +281,19 @@ export default {
           raw: content.substring(0, 300)
         }), {
           status: 500,
-          headers: { "Content-Type": "application/json" },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
       return new Response(JSON.stringify(tasks), {
         status: 200,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
 
     } catch (error: any) {
       return new Response(JSON.stringify({ error: error.message }), {
         status: 500,
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
   },

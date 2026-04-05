@@ -12,58 +12,49 @@ import { DayTask } from "./types";
  * 3. Set VITE_WORKER_URL=https://your-worker.your-subdomain.workers.dev in your .env
  */
 
+// P0-1: Worker Proxy URL - protect your keys on the backend
 const WORKER_URL = "https://zhuri-ai-proxy.xiaoqingwang07.workers.dev";
 
-const SYSTEM_PROMPT = `你是一位专业的阅读教练，擅长将大目标拆解为每日可执行的任务。
+/**
+ * Get or create a persistent unique Device ID for cloud sync
+ */
+const DEVICE_ID_KEY = "zhuri_device_id";
+export function getDeviceId(): string {
+  if (typeof window === "undefined") return "server";
+  let id = localStorage.getItem(DEVICE_ID_KEY);
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem(DEVICE_ID_KEY, id);
+  }
+  return id;
+}
 
-你需要根据用户提供的目标，生成循序渐进的每日阅读任务。
-
-要求：
-1. 每天1-3个具体任务
-2. 任务从易到难，循序渐进
-3. 估算合理的页数范围
-4. 最后留1-2天用于全书回顾和总结
-5. 输出必须是有效的JSON数组
-
-输出格式：
-{
-  "tasks": [
-    {
-      "day": 1,
-      "task": "具体任务描述",
-      "pages": "P1-P30",
-      "type": "reading" | "notes" | "review" | "summary"
-    }
-  ]
-}`;
-
+/**
+ * AI: Generate tasks for a goal
+ */
 export async function generateTasksWithAI(
   goal: string,
   totalDays: number,
   signal?: AbortSignal
 ): Promise<DayTask[]> {
-  // P0-1: Use worker proxy - key is protected on the backend
   const response = await fetch(WORKER_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "x-device-id": getDeviceId(),
     },
     body: JSON.stringify({ goal, totalDays }),
     signal,
   });
 
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`AI服务暂时不可用，请稍后重试 (${response.status})`);
+    const errorText = await response.text();
+    throw new Error(`AI服务暂时不可用 (${response.status})`);
   }
 
   const data = await response.json();
+  if (data.error) throw new Error(`AI服务异常: ${data.error}`);
 
-  if (data.error) {
-    throw new Error(`AI服务暂时不可用: ${data.error}`);
-  }
-
-  // Parse the tasks from worker response
   const tasksData = data.tasks || data.days || [];
   const tasks: DayTask[] = tasksData.map((t: any, index: number) => {
     const date = new Date();
@@ -80,4 +71,44 @@ export async function generateTasksWithAI(
   });
 
   return tasks;
+}
+
+/**
+ * CLOUD: Sync current goals/data to Cloudflare KV
+ */
+export async function saveDataToCloud(data: any): Promise<boolean> {
+  try {
+    const response = await fetch(`${WORKER_URL}/sync`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-device-id": getDeviceId(),
+      },
+      body: JSON.stringify(data),
+    });
+    return response.ok;
+  } catch (err) {
+    console.error("Cloud sync failed:", err);
+    return false;
+  }
+}
+
+/**
+ * CLOUD: Load goals/data from Cloudflare KV
+ */
+export async function loadDataFromCloud(): Promise<any> {
+  try {
+    const response = await fetch(`${WORKER_URL}/get`, {
+      method: "GET",
+      headers: {
+        "x-device-id": getDeviceId(),
+      },
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return (data && Object.keys(data).length > 0) ? data : null;
+  } catch (err) {
+    console.error("Cloud loading failed:", err);
+    return null;
+  }
 }

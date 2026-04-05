@@ -13,7 +13,7 @@ import {
   loadSupervisionUsers,
   updateUserCheckIn,
 } from "@/lib/store";
-import { generateTasksWithAI } from "@/lib/ai";
+import { generateTasksWithAI, loadDataFromCloud } from "@/lib/ai";
 import Certificate from "@/components/Certificate";
 import Onboarding from "@/components/Onboarding";
 import InviteModal from "@/components/InviteModal";
@@ -155,18 +155,34 @@ export default function Home() {
 
   // Check if first time user
   useEffect(() => {
-    const loadedGoals = loadGoals();
-    const hasSeenOnboarding = localStorage.getItem("zhuri_onboarding");
-    
-    if (loadedGoals.length === 0 && !hasSeenOnboarding) {
-      setIsOnboarding(true);
-    } else {
-      setGoals(loadedGoals);
-      if (loadedGoals.length > 0 && !activeGoalId) {
-        setActiveGoalId(loadedGoals[0].id);
+    const initApp = async () => {
+      let loadedGoals = loadGoals();
+      const hasSeenOnboarding = localStorage.getItem("zhuri_onboarding");
+      
+      // P2: Automatic cloud recovery if local is empty
+      if (loadedGoals.length === 0) {
+        setIsLoading(true);
+        const cloudData = await loadDataFromCloud();
+        if (cloudData && cloudData.zhuri_goals) {
+          loadedGoals = cloudData.zhuri_goals;
+          saveGoals(loadedGoals); // Persist to local immediately
+          console.log("☁️ Data recovered from Cloudflare KV");
+        }
+        setIsLoading(false);
       }
-    }
-    setSupervisionUsers(loadSupervisionUsers());
+
+      if (loadedGoals.length === 0 && !hasSeenOnboarding) {
+        setIsOnboarding(true);
+      } else {
+        setGoals(loadedGoals);
+        if (loadedGoals.length > 0) {
+          setActiveGoalId(loadedGoals[0].id);
+        }
+      }
+      setSupervisionUsers(loadSupervisionUsers());
+    };
+
+    initApp();
   }, []);
 
   useEffect(() => {

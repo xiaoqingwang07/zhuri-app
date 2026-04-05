@@ -1,4 +1,5 @@
 import { Goal, DayTask, BADGES, DEFAULT_BADGES, SupervisionUser, MOCK_USERS } from "./types";
+import { saveDataToCloud } from "./ai";
 
 const GOALS_KEY = "zhuri_goals";
 const USERS_KEY = "zhuri_supervision_users";
@@ -6,6 +7,11 @@ const USERS_KEY = "zhuri_supervision_users";
 export function saveGoals(goals: Goal[]): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(GOALS_KEY, JSON.stringify(goals));
+  
+  // P2: Background sync to Cloudflare KV
+  if (goals.length > 0) {
+    saveDataToCloud({ [GOALS_KEY]: goals }).catch(err => console.log('Sync deferred:', err));
+  }
 }
 
 export function loadGoals(): Goal[] {
