@@ -16,16 +16,78 @@ import { DayTask } from "./types";
 const WORKER_URL = "https://zhuri-ai-proxy.xiaoqingwang07.workers.dev";
 
 /**
- * Get or create a persistent unique Device ID for cloud sync
+ * Get or create a persistent unique Device ID for cloud sync.
+ * Stored in IndexedDB which survives localStorage/cache clears.
+ * Falls back to localStorage as secondary storage.
  */
 const DEVICE_ID_KEY = "zhuri_device_id";
+const IDB_DB_NAME = "zhuri_persist";
+const IDB_STORE_NAME = "meta";
+
+// In-memory cache so we don't hit IDB on every request
+let _deviceIdCache: string | null = null;
+
+async function openMetaDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_DB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE_NAME);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbGet(key: string): Promise<string | null> {
+  try {
+    const db = await openMetaDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(IDB_STORE_NAME, "readonly");
+      const req = tx.objectStore(IDB_STORE_NAME).get(key);
+      req.onsuccess = () => resolve(req.result ?? null);
+      req.onerror = () => resolve(null);
+    });
+  } catch { return null; }
+}
+
+async function idbSet(key: string, value: string): Promise<void> {
+  try {
+    const db = await openMetaDB();
+    await new Promise<void>((resolve) => {
+      const tx = db.transaction(IDB_STORE_NAME, "readwrite");
+      tx.objectStore(IDB_STORE_NAME).put(value, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+  } catch { /* silent fail */ }
+}
+
+/** Async version — always returns a valid ID. Call this at app startup. */
+export async function getDeviceIdAsync(): Promise<string> {
+  if (typeof window === "undefined") return "server";
+  if (_deviceIdCache) return _deviceIdCache;
+
+  // 1. Try IndexedDB first (survives cache clears)
+  let id = await idbGet(DEVICE_ID_KEY);
+
+  // 2. Fall back to localStorage (for old users migrating)
+  if (!id) id = localStorage.getItem(DEVICE_ID_KEY);
+
+  // 3. Generate a new one
+  if (!id) id = crypto.randomUUID();
+
+  // Persist in both storages for redundancy
+  _deviceIdCache = id;
+  await idbSet(DEVICE_ID_KEY, id);
+  localStorage.setItem(DEVICE_ID_KEY, id);
+
+  return id;
+}
+
+/** Sync version — uses in-memory cache, initialised by getDeviceIdAsync() */
 export function getDeviceId(): string {
   if (typeof window === "undefined") return "server";
-  let id = localStorage.getItem(DEVICE_ID_KEY);
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem(DEVICE_ID_KEY, id);
-  }
+  if (_deviceIdCache) return _deviceIdCache;
+  // Last-resort sync fallback (pre-init path)
+  const id = localStorage.getItem(DEVICE_ID_KEY) ?? "uninitialised";
   return id;
 }
 

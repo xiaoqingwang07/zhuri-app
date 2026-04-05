@@ -13,7 +13,7 @@ import {
   loadSupervisionUsers,
   updateUserCheckIn,
 } from "@/lib/store";
-import { generateTasksWithAI, loadDataFromCloud } from "@/lib/ai";
+import { generateTasksWithAI, loadDataFromCloud, getDeviceIdAsync } from "@/lib/ai";
 import Certificate from "@/components/Certificate";
 import Onboarding from "@/components/Onboarding";
 import InviteModal from "@/components/InviteModal";
@@ -156,6 +156,9 @@ export default function Home() {
   // Check if first time user
   useEffect(() => {
     const initApp = async () => {
+      // P0-fix: Init IndexedDB-persisted deviceId first, before any cloud call
+      await getDeviceIdAsync();
+
       let loadedGoals = loadGoals();
       const hasSeenOnboarding = localStorage.getItem("zhuri_onboarding");
       
@@ -165,7 +168,7 @@ export default function Home() {
         const cloudData = await loadDataFromCloud();
         if (cloudData && cloudData.zhuri_goals) {
           loadedGoals = cloudData.zhuri_goals;
-          saveGoals(loadedGoals); // Persist to local immediately
+          saveGoals(loadedGoals);
           console.log("☁️ Data recovered from Cloudflare KV");
         }
         setIsLoading(false);
@@ -249,19 +252,19 @@ export default function Home() {
       clearTimeout(timeoutId);
       clearInterval(countdownId);
       // AbortError = timeout, show specific message
-      if (err?.name === "AbortError" || err?.message?.includes("aborted")) {
-        setError("AI响应超时，已自动切换默认任务");
-      } else {
-        setError("AI生成失败，已切换默认任务");
-      }
+      const errMsg = err?.name === "AbortError" || err?.message?.includes("aborted")
+        ? "AI响应超时，已自动切换默认任务"
+        : "AI生成失败，已切换默认任务";
       console.log("AI generation failed, using default tasks:", err);
-      // Short delay so user sees the error message before fallback
+      // P0-fix: set isCreating false FIRST so confirm button is always enabled
+      setIsCreating(false);
+      setError(errMsg);
       setTimeout(() => {
         const fallbackTasks = generateDefaultTasks(totalDays, goalName);
         setPendingTasks(fallbackTasks);
         setCreatingStep("confirm");
-        setIsCreating(false);
-      }, 1500);
+        setError("");
+      }, 1200);
     }
   };
 
@@ -691,8 +694,8 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Goal Tabs */}
-        {goals.length > 1 && (
+        {/* Goal Tabs — always show when goals exist so user can add more */}
+        {goals.length > 0 && (
           <div className="max-w-lg mx-auto mt-3 flex gap-2 overflow-x-auto pb-1">
             {goals.map((goal) => (
               <button
@@ -716,9 +719,9 @@ export default function Home() {
                   setTotalDays(20);
                   setShowCreateForm(true);
                 }}
-                className="px-3 py-1.5 rounded-full text-xs whitespace-nowrap bg-[var(--bg-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                className="px-3 py-1.5 rounded-full text-xs whitespace-nowrap bg-[var(--accent)]/20 text-[var(--accent)] hover:bg-[var(--accent)]/30 transition-colors font-medium"
               >
-                + 新目标
+                ＋ 新目标
               </button>
             )}
           </div>
@@ -1028,40 +1031,60 @@ export default function Home() {
             <div className="text-center py-4">
               <h2 className="text-xl font-bold">👥 监督团</h2>
               <p className="text-sm text-[var(--text-secondary)]">一个人走得快，一群人走得远</p>
-              <button
-                onClick={() => setShowInvite(true)}
-                className="mt-2 px-4 py-2 bg-[var(--accent)]/20 text-[var(--accent)] rounded-lg text-sm hover:bg-[var(--accent)]/30 transition-colors"
-              >
-                邀请朋友加入
-              </button>
             </div>
 
-            <div className="space-y-3">
-              {supervisionUsers.map((user) => (
-                <div key={user.id} className="bg-[var(--bg-secondary)] rounded-xl p-4">
-                  <div className="flex items-center gap-3">
-                    <span className="text-3xl">{user.avatar}</span>
-                    <div className="flex-1">
-                      <p className="font-semibold">{user.name}</p>
-                      <p className="text-xs text-[var(--text-secondary)]">
-                        🔥 连续 {user.streak} 天 · {user.todayCompleted ? "今日已完成" : "等待打卡"}
-                      </p>
-                    </div>
-                    {!user.todayCompleted && (
-                      <button
-                        onClick={() => handleUserCheckIn(user.id)}
-                        className="px-4 py-2 bg-[var(--accent)] text-[var(--text-primary)] rounded-lg text-sm font-medium hover:bg-[var(--accent-light)] transition-colors"
-                      >
-                        戳一下TA
-                      </button>
-                    )}
-                    {user.todayCompleted && (
-                      <span className="text-2xl">✅</span>
-                    )}
-                  </div>
+            {supervisionUsers.length === 0 ? (
+              /* P0-fix: Replace fake users with honest empty state + invite CTA */
+              <div className="bg-[var(--bg-secondary)] rounded-2xl p-8 text-center space-y-4">
+                <div className="text-5xl">🤝</div>
+                <div>
+                  <p className="font-semibold text-[var(--text-primary)]">还没有队友</p>
+                  <p className="text-sm text-[var(--text-secondary)] mt-1">
+                    邀请一个朋友一起打卡，互相督促，坚持到底的概率会高 3 倍
+                  </p>
                 </div>
-              ))}
-            </div>
+                <button
+                  onClick={() => setShowInvite(true)}
+                  className="px-6 py-3 bg-[var(--accent)] text-white font-medium rounded-xl hover:bg-[var(--accent-light)] transition-colors"
+                >
+                  邀请好友加入 →
+                </button>
+                <p className="text-xs text-[var(--text-tertiary)]">发送链接，朋友加入后就能互相看到进度</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {supervisionUsers.map((user) => (
+                  <div key={user.id} className="bg-[var(--bg-secondary)] rounded-xl p-4">
+                    <div className="flex items-center gap-3">
+                      <span className="text-3xl">{user.avatar}</span>
+                      <div className="flex-1">
+                        <p className="font-semibold">{user.name}</p>
+                        <p className="text-xs text-[var(--text-secondary)]">
+                          🔥 连续 {user.streak} 天 · {user.todayCompleted ? "今日已完成" : "等待打卡"}
+                        </p>
+                      </div>
+                      {!user.todayCompleted && (
+                        <button
+                          onClick={() => handleUserCheckIn(user.id)}
+                          className="px-4 py-2 bg-[var(--accent)] text-[var(--text-primary)] rounded-lg text-sm font-medium hover:bg-[var(--accent-light)] transition-colors"
+                        >
+                          戳一下TA
+                        </button>
+                      )}
+                      {user.todayCompleted && (
+                        <span className="text-2xl">✅</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <button
+                  onClick={() => setShowInvite(true)}
+                  className="w-full py-3 bg-[var(--accent)]/10 text-[var(--accent)] rounded-xl text-sm font-medium hover:bg-[var(--accent)]/20 transition-colors"
+                >
+                  ＋ 继续邀请朋友
+                </button>
+              </div>
+            )}
           </div>
         )}
 
