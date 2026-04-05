@@ -48,6 +48,10 @@ export default function Home() {
   // P2-8: Export/Import
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // P1: One-time cloud sync notice
+  const [showCloudBanner, setShowCloudBanner] = useState(false);
+  const [selectedBadge, setSelectedBadge] = useState<string | null>(null);
+
   // Goal creation state
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [goalName, setGoalName] = useState("");
@@ -183,6 +187,10 @@ export default function Home() {
         }
       }
       setSupervisionUsers(loadSupervisionUsers());
+
+      // P1: Show cloud banner once
+      const bannerSeen = localStorage.getItem("zhuri_cloud_banner_seen");
+      if (!bannerSeen) setShowCloudBanner(true);
     };
 
     initApp();
@@ -646,7 +654,30 @@ export default function Home() {
         </div>
       )}
 
+      {/* P1: One-time cloud sync banner */}
+      {showCloudBanner && (
+        <div className="fixed top-4 left-4 right-4 max-w-lg mx-auto z-50">
+          <div className="bg-gradient-to-r from-blue-500/90 to-indigo-500/90 backdrop-blur-md rounded-2xl p-4 flex items-start gap-3 shadow-xl">
+            <span className="text-2xl flex-shrink-0">☁️</span>
+            <div className="flex-1">
+              <p className="text-white font-medium text-sm">云端备份已开启</p>
+              <p className="text-white/80 text-xs mt-0.5">数据自动同步到 Cloudflare，换设备或清缓存后都能恢复</p>
+            </div>
+            <button
+              onClick={() => {
+                setShowCloudBanner(false);
+                localStorage.setItem("zhuri_cloud_banner_seen", "1");
+              }}
+              className="text-white/70 hover:text-white text-lg leading-none flex-shrink-0 mt-0.5"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
+
       <header className="bg-[var(--bg-secondary)] px-4 py-4 sticky top-0 z-40">
         <div className="max-w-lg mx-auto flex items-center justify-between">
           <div>
@@ -879,17 +910,28 @@ export default function Home() {
                 {activeGoal.badges.map((badge) => (
                   <div
                     key={badge.id}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg ${
+                    onClick={() => setSelectedBadge(selectedBadge === badge.id ? null : badge.id)}
+                    className={`flex flex-col items-start gap-1 px-3 py-2 rounded-xl cursor-pointer transition-all ${
                       badge.unlockedAt
                         ? "bg-[var(--accent)]/20 border border-[var(--accent)]"
-                        : "bg-[var(--bg-primary)] opacity-50"
+                        : "bg-[var(--bg-primary)] opacity-60 border border-[var(--border)]"
                     }`}
                   >
-                    <span>{badge.emoji}</span>
-                    <span className="text-sm">{badge.name}</span>
+                    <div className="flex items-center gap-2">
+                      <span>{badge.emoji}</span>
+                      <span className="text-sm font-medium">{badge.name}</span>
+                    </div>
+                    {selectedBadge === badge.id && (
+                      <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                        {badge.unlockedAt
+                          ? `✅ 已解锁 · 连续打卡 ${badge.daysRequired} 天获得`
+                          : `🔒 连续打卡 ${badge.daysRequired} 天可解锁（当前 ${activeGoal.streak} 天）`}
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
+              <p className="text-xs text-[var(--text-tertiary)] mt-2">点击徽章查看解锁条件</p>
             </div>
           </div>
         )}

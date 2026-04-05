@@ -1,4 +1,4 @@
-import { Goal, DayTask, BADGES, DEFAULT_BADGES, SupervisionUser, MOCK_USERS } from "./types";
+import { Goal, DayTask, BADGES, DEFAULT_BADGES, SupervisionUser } from "./types";
 import { saveDataToCloud } from "./ai";
 
 const GOALS_KEY = "zhuri_goals";
@@ -221,13 +221,13 @@ export function generateDefaultTasks(totalDays: number, bookName: string): DayTa
 
 // Supervision users helpers
 export function loadSupervisionUsers(): SupervisionUser[] {
-  if (typeof window === "undefined") return MOCK_USERS;
+  if (typeof window === "undefined") return [];
   const data = localStorage.getItem(USERS_KEY);
-  if (!data) return MOCK_USERS;
+  if (!data) return []; // P0-fix: no mock data — start with empty, real friends only
   try {
     return JSON.parse(data);
   } catch {
-    return MOCK_USERS;
+    return [];
   }
 }
 
