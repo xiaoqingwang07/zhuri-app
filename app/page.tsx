@@ -59,6 +59,7 @@ export default function Home() {
   const [selectedTemplate, setSelectedTemplate] = useState<number | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [creatingStep, setCreatingStep] = useState<"input" | "loading" | "confirm" | "done">("input");
+  const [isFallback, setIsFallback] = useState(false);
   const [loadingCountdown, setLoadingCountdown] = useState(15);
   const [pendingTasks, setPendingTasks] = useState<DayTask[] | null>(null);
 
@@ -252,28 +253,31 @@ export default function Home() {
       const tasks = await generateTasksWithAI(goalName, totalDays, controller.signal);
       clearTimeout(timeoutId);
       clearInterval(countdownId);
-      // P0-2: Go to confirm step instead of directly creating
+      // AI succeeded — go to confirm step
+      setIsFallback(false);
       setPendingTasks(tasks);
       setCreatingStep("confirm");
       setIsCreating(false);
     } catch (err: any) {
       clearTimeout(timeoutId);
       clearInterval(countdownId);
-      // AbortError = timeout, show specific message
-      const errMsg = err?.name === "AbortError" || err?.message?.includes("aborted")
-        ? "AI响应超时，已自动切换默认任务"
-        : "AI生成失败，已切换默认任务";
-      console.log("AI generation failed, using default tasks:", err);
-      // P0-fix: set isCreating false FIRST so confirm button is always enabled
+      const isTimeout = err?.name === "AbortError" || err?.message?.includes("aborted");
+      console.log("AI generation failed:", err);
       setIsCreating(false);
-      setError(errMsg);
-      setTimeout(() => {
-        const fallbackTasks = generateDefaultTasks(totalDays, goalName);
-        setPendingTasks(fallbackTasks);
-        setCreatingStep("confirm");
-        setError("");
-      }, 1200);
+      // Show honest failure state — don't silently use a template
+      setIsFallback(true);
+      setError(isTimeout ? "AI 超时，请再试一次" : "AI 生成失败，请再试");
+      setPendingTasks(null);
+      setCreatingStep("confirm"); // go to confirm to show retry UI
     }
+  };
+
+  // Retry AI generation
+  const retryGenerate = () => {
+    setError("");
+    setIsFallback(false);
+    setPendingTasks(null);
+    createGoal();
   };
 
   // P0-2: Confirm tasks before committing
@@ -384,12 +388,44 @@ export default function Home() {
                 <span className={loadingCountdown <= 4 ? "text-[var(--accent)] font-medium" : ""}>③ 完成</span>
               </div>
             </div>
+          ) : creatingStep === "confirm" && isFallback ? (
+            /* AI failed — honest error state with retry */
+            <div className="space-y-5 text-center py-2">
+              <div className="text-5xl">📵</div>
+              <div>
+                <p className="font-semibold text-lg">AI 生成失败了</p>
+                <p className="text-sm text-[var(--text-secondary)] mt-1">
+                  {error || "AI 服务暂时不可用，请稍候再试"}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <button
+                  onClick={retryGenerate}
+                  disabled={isCreating}
+                  className="w-full py-3 bg-[var(--accent)] text-white font-semibold rounded-xl hover:bg-[var(--accent-light)] transition-colors disabled:opacity-50"
+                >
+                  {isCreating ? "重新生成中...…" : "🔄 再试一次"}
+                </button>
+                <button
+                  onClick={() => {
+                    setCreatingStep("input");
+                    setIsFallback(false);
+                    setError("");
+                    setPendingTasks(null);
+                  }}
+                  className="w-full py-2.5 text-sm text-[var(--text-secondary)] border border-[var(--border)] rounded-xl hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors"
+                >
+                  修改目标或天数
+                </button>
+              </div>
+              <p className="text-xs text-[var(--text-tertiary)]">网络不好时可能需要试 2-3 次</p>
+            </div>
           ) : creatingStep === "confirm" && pendingTasks ? (
-            /* P0-2: AI task confirmation step */
+            /* AI generated — task confirmation step */
             <div className="space-y-4">
               <div className="text-center">
                 <div className="text-4xl mb-2">✨</div>
-                <p className="font-semibold">帮你拆好了！</p>
+                <p className="font-semibold">AI 已为你个性化生成！</p>
                 <p className="text-sm text-[var(--text-secondary)] mt-1">
                   看看这几天的任务，有不合适的可以改
                 </p>
@@ -410,10 +446,6 @@ export default function Home() {
                     还有 {pendingTasks.length - 5} 天任务...
                   </p>
                 )}
-                {/* P2-7: AI task manual hint */}
-                <p className="text-xs text-center text-[var(--text-tertiary)]">
-                  任务不满意？点"重新生成"换个方式，或者直接开始——之后还可以在任务详情里单独调整
-                </p>
               </div>
               {/* Action buttons */}
               <div className="space-y-2">
@@ -425,18 +457,16 @@ export default function Home() {
                 </button>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => {
-                      setCreatingStep("input");
-                      setPendingTasks(null);
-                    }}
-                    className="flex-1 py-2.5 text-sm text-[var(--text-secondary)] border border-[var(--border)] rounded-xl hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors"
+                    onClick={retryGenerate}
+                    disabled={isCreating}
+                    className="flex-1 py-2.5 text-sm text-[var(--text-secondary)] border border-[var(--border)] rounded-xl hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors disabled:opacity-50"
                   >
-                    重新生成
+                    {isCreating ? "生成中...…" : "🔄 重新生成"}
                   </button>
                   <button
                     onClick={() => {
-                      // Just go back to edit name/days, keep pending tasks
                       setCreatingStep("input");
+                      setPendingTasks(null);
                     }}
                     className="flex-1 py-2.5 text-sm text-[var(--text-secondary)] border border-[var(--border)] rounded-xl hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors"
                   >
