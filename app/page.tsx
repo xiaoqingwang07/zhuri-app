@@ -210,12 +210,7 @@ export default function Home() {
     }
   }, [showBadge]);
 
-  const completeOnboarding = () => {
-    localStorage.setItem("zhuri_onboarding", "true");
-    setIsOnboarding(false);
-  };
-
-  const createGoal = async () => {
+  const createGoal = async (isAutoRetry = false) => {
     if (goals.length >= MAX_GOALS) {
       setError(`最多只能同时进行${MAX_GOALS}个目标`);
       return;
@@ -232,13 +227,12 @@ export default function Home() {
     setIsCreating(true);
     setCreatingStep("loading");
     setError("");
-    setLoadingCountdown(15);
+    const TIMEOUT_MS = 30000;
+    setLoadingCountdown(30);
 
-    // P0-1: AbortController with 15s timeout — fetch-level abort, not setTimeout hack
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-    // P2-1: Countdown timer display
     const countdownId = setInterval(() => {
       setLoadingCountdown((prev) => {
         if (prev <= 1) {
@@ -253,7 +247,6 @@ export default function Home() {
       const tasks = await generateTasksWithAI(goalName, totalDays, controller.signal);
       clearTimeout(timeoutId);
       clearInterval(countdownId);
-      // AI succeeded — go to confirm step
       setIsFallback(false);
       setPendingTasks(tasks);
       setCreatingStep("confirm");
@@ -261,14 +254,20 @@ export default function Home() {
     } catch (err: any) {
       clearTimeout(timeoutId);
       clearInterval(countdownId);
-      const isTimeout = err?.name === "AbortError" || err?.message?.includes("aborted");
-      console.log("AI generation failed:", err);
+      
+      const isAbort = err?.name === "AbortError" || err?.message?.includes("aborted");
+      
+      if (!isAutoRetry) {
+        console.warn("AI generation timed out/failed, attempting one silent retry...");
+        return createGoal(true); // Retry once silently
+      }
+
+      console.error("AI final attempt failed:", err);
       setIsCreating(false);
-      // Show honest failure state — don't silently use a template
       setIsFallback(true);
-      setError(isTimeout ? "AI 超时，请再试一次" : "AI 生成失败，请再试");
+      setError(isAbort ? "网络太拥挤，AI 没赶过来" : "AI 脑子暂时卡住了");
       setPendingTasks(null);
-      setCreatingStep("confirm"); // go to confirm to show retry UI
+      setCreatingStep("confirm");
     }
   };
 
@@ -349,7 +348,6 @@ export default function Home() {
   if (isOnboarding) {
     return <Onboarding onComplete={completeOnboarding} />;
   }
-
   // No goal created yet - show creation form
   if (goals.length === 0 || showCreateForm || creatingStep !== "done" && showCreateForm) {
     return (
@@ -362,30 +360,33 @@ export default function Home() {
 
           {creatingStep === "loading" ? (
             <div className="bg-[var(--bg-secondary)] rounded-2xl p-8 text-center space-y-4">
-              <div className="text-5xl animate-bounce">🤖</div>
-              <div>
-                <p className="font-semibold">正在帮你拆解目标...</p>
-                <p className="text-sm text-[var(--text-secondary)] mt-1">稍等，马上就好</p>
+              <div className="text-5xl animate-bounce">
+                {loadingCountdown > 20 ? "🏗️" : loadingCountdown > 10 ? "🧠" : "✨"}
               </div>
-              {/* Progress bar - P1-3 */}
+              <div>
+                <p className="font-semibold">
+                  {loadingCountdown > 22 ? "正在请教硅谷教练..." : 
+                   loadingCountdown > 15 ? "正在打磨任务细节..." : 
+                   loadingCountdown > 5 ? "正在为你量身定制..." : 
+                   "最后润色中，马上就好"}
+                </p>
+                <p className="text-sm text-[var(--text-secondary)] mt-1">大约还需要 {loadingCountdown} 秒</p>
+              </div>
+              {/* Progress bar adapter for 30s */}
               <div className="space-y-1">
                 <div className="h-2 bg-[var(--bg-primary)] rounded-full overflow-hidden">
                   <div
                     className="h-full bg-[var(--accent)] rounded-full transition-all duration-1000 ease-linear"
-                    style={{ width: `${((15 - loadingCountdown) / 15) * 100}%` }}
+                    style={{ width: `${((30 - loadingCountdown) / 30) * 100}%` }}
                   />
                 </div>
-                <p className="text-xs text-[var(--text-secondary)]">
-                  预计等待 {loadingCountdown}s 内完成
-                </p>
-              </div>
-              {/* Step indicator */}
-              <div className="flex items-center justify-center gap-2 text-xs text-[var(--text-secondary)]">
-                <span className={loadingCountdown <= 12 ? "text-[var(--accent)] font-medium" : ""}>① 分析目标</span>
-                <span className="text-[var(--text-secondary)]">→</span>
-                <span className={loadingCountdown <= 8 ? "text-[var(--accent)] font-medium" : ""}>② 生成任务</span>
-                <span className="text-[var(--text-secondary)]">→</span>
-                <span className={loadingCountdown <= 4 ? "text-[var(--accent)] font-medium" : ""}>③ 完成</span>
+                <div className="flex justify-between text-[10px] text-[var(--text-tertiary)] uppercase tracking-wider">
+                  <span className={loadingCountdown <= 25 ? "text-[var(--accent)] font-medium" : ""}>① 分析目标</span>
+                  <span className="text-[var(--text-secondary)]">→</span>
+                  <span className={loadingCountdown <= 15 ? "text-[var(--accent)] font-medium" : ""}>② 生成任务</span>
+                  <span className="text-[var(--text-secondary)]">→</span>
+                  <span className={loadingCountdown <= 5 ? "text-[var(--accent)] font-medium" : ""}>③ 完成</span>
+                </div>
               </div>
             </div>
           ) : creatingStep === "confirm" && isFallback ? (
