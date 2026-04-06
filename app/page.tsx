@@ -243,6 +243,7 @@ export default function Home() {
       });
     }, 1000);
 
+    // 3. AI 调用与极速兜底逻辑 (极其重要：解决一切超时问题)
     try {
       const tasks = await generateTasksWithAI(goalName, totalDays, controller.signal);
       clearTimeout(timeoutId);
