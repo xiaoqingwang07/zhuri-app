@@ -110,29 +110,83 @@ export async function generateTasksWithAI(
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
     throw new Error(`AI服务暂时不可用 (${response.status})`);
   }
 
-  const data = await response.json();
-  if (data.error) throw new Error(`AI服务异常: ${data.error}`);
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("无法读取AI响应流");
 
-  const tasksData = data.tasks || data.days || [];
-  const tasks: DayTask[] = tasksData.map((t: any, index: number) => {
-    const date = new Date();
-    date.setDate(date.getDate() + index);
+  const decoder = new TextDecoder();
+  let fullText = "";
+  let accumulatedTasks: any[] = [];
+  
+  // We need to find the latest valid task objects in the stream
+  // Since it's a JSON array, we can use a regex to look for complete objects
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
 
-    return {
-      day: t.day || index + 1,
-      date: date.toISOString().split("T")[0],
-      task: t.task || t.content || "",
-      pages: t.pages || "",
-      type: t.type || "reading",
-      completed: false,
-    };
-  });
+    const chunk = decoder.decode(value);
+    // SiliconFlow/SSE format handling
+    const lines = chunk.split("\n");
+    for (const line of lines) {
+      if (line.startsWith("data: ")) {
+        try {
+          const data = JSON.parse(line.slice(6));
+          const delta = data.choices[0]?.delta?.content || "";
+          fullText += delta;
+        } catch (e) { /* ignore parse errors for partial chunks */ }
+      }
+    }
+    
+    // Attempt to extract complete tasks from the partial fullText
+    // Tasks look like {"day":1,"task":"...","pages":"...","type":"..."}
+    try {
+      const taskPattern = /\{"day":\d+,"task":"[^"]+","pages":"[^"]*","type":"[^"]+"\}/g;
+      const matches = fullText.match(taskPattern);
+      if (matches) {
+        accumulatedTasks = matches.map(m => JSON.parse(m));
+      }
+    } catch (e) { /* ignore */ }
+  }
 
-  return tasks;
+  // After stream completes, if we have tasks, use them
+  if (accumulatedTasks.length > 0) {
+    return accumulatedTasks.map((t, index) => {
+      const date = new Date();
+      date.setDate(date.getDate() + index);
+      return {
+        day: t.day || index + 1,
+        date: date.toISOString().split("T")[0],
+        task: t.task || t.content || "",
+        pages: t.pages || "",
+        type: t.type || "reading",
+        completed: false,
+      };
+    });
+  }
+
+  // Final fallback: try to parse the entire message if the regex missed it
+  try {
+    const jsonMatch = fullText.match(/\{[\s\S]*\}/);
+    const data = JSON.parse(jsonMatch ? jsonMatch[0] : fullText);
+    const tasksData = data.tasks || data.days || (Array.isArray(data) ? data : []);
+    
+    return tasksData.map((t: any, index: number) => {
+      const date = new Date();
+      date.setDate(date.getDate() + index);
+      return {
+        day: t.day || index + 1,
+        date: date.toISOString().split("T")[0],
+        task: t.task || t.content || "",
+        pages: t.pages || "",
+        type: t.type || "reading",
+        completed: false,
+      };
+    });
+  } catch (e) {
+    throw new Error("AI生成的格式解析失败，请再试一次");
+  }
 }
 
 /**

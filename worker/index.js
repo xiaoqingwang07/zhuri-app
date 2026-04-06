@@ -90,81 +90,68 @@ export default {
 
     const API_KEY = env.API_KEY;
     if (!API_KEY) {
-      return new Response(JSON.stringify({ error: "API Key not configured on server" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      return new Response(JSON.stringify({ error: "Server config error" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     try {
-      const body = await request.json();
-      const { goal, totalDays } = body;
+      const { goal, totalDays } = await request.json();
+      const API_KEY = env.API_KEY;
 
-      if (!goal || !totalDays) {
-        return new Response(JSON.stringify({ error: "Missing goal or totalDays" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+      const model = totalDays > 30 ? "Qwen/Qwen2.5-72B-Instruct" : "deepseek-ai/DeepSeek-V3";
+      
+      const systemPrompt = `你是一个目标拆解教练。输出严格的JSON列表，不要废话。格式: {"tasks":[{"day":1,"task":"详情","pages":"量化","type":"learn"}]}。语言:中文。`;
+      const userPrompt = `目标:${goal},天数:${totalDays}。按天顺序生成，不可遗漏。`;
 
-      const userPrompt = `目标：${goal}\n总天数：${totalDays}天\n\n根据这个目标，生成${totalDays}天的每日具体任务计划，严格返回JSON。`;
-
-      const response = await fetch(SILICONFLOW_API_URL, {
+      const aiResponse = await fetch("https://api.siliconflow.cn/v1/chat/completions", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${API_KEY}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${API_KEY}` },
         body: JSON.stringify({
-          model: "deepseek-ai/DeepSeek-V3",
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: userPrompt },
-          ],
+          model: model,
+          messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
           temperature: 0.7,
-          max_tokens: 4000,
+          stream: true, // 开启流式输出
         }),
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        return new Response(JSON.stringify({ error: "AI API error", details: errorText }), {
-          status: response.status,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+      if (!aiResponse.ok) return new Response("AI API Busy", { status: 503, headers: corsHeaders });
 
-      const data = await response.json();
-      const content = data.choices?.[0]?.message?.content || "";
+      // 把 AI 的流直接转发给前端
+      const { readable, writable } = new TransformStream();
+      const writer = writable.getWriter();
+      const reader = aiResponse.body.getReader();
+      const encoder = new TextEncoder();
+      const decoder = new TextDecoder();
 
-      let tasks;
-      try {
-        const jsonMatch = content.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          tasks = JSON.parse(jsonMatch[0]);
-        } else {
-          tasks = JSON.parse(content);
+      (async () => {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            const chunk = decoder.decode(value);
+            // 简单转发 SSE 原始数据
+            await writer.write(encoder.encode(chunk));
+          }
+        } catch (e) {
+          console.error("Stream error:", e);
+        } finally {
+          writer.close();
         }
-      } catch {
-        return new Response(JSON.stringify({
-          error: "Failed to parse AI response",
-          raw: content.substring(0, 300)
-        }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+      })();
 
-      return new Response(JSON.stringify(tasks), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      return new Response(readable, {
+        headers: { 
+          ...corsHeaders, 
+          "Content-Type": "text/event-stream", 
+          "Cache-Control": "no-cache", 
+          "Connection": "keep-alive" 
+        }
       });
 
     } catch (error) {
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
     }
   },
 };
