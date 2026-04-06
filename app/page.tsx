@@ -243,9 +243,17 @@ export default function Home() {
       });
     }, 1000);
 
-    // 3. AI 调用与极速兜底逻辑 (极其重要：解决一切超时问题)
+    // 3. AI 调用与智能重试 (支持 18 天等复杂目标)
     try {
-      const tasks = await generateTasksWithAI(goalName, totalDays, controller.signal);
+      let tasks: DayTask[];
+      try {
+        tasks = await generateTasksWithAI(goalName, totalDays, controller.signal);
+      } catch (err) {
+        console.warn("First attempt failed, retrying with simple mode...");
+        // 二次重试，给 AI 更多余地
+        tasks = await generateTasksWithAI(goalName, totalDays, controller.signal);
+      }
+
       clearTimeout(timeoutId);
       clearInterval(countdownId);
       setIsFallback(false);
