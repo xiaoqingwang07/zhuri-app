@@ -1,137 +1,99 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { loadGoals } from "@/lib/store";
 
-interface UserCase {
-  id: string;
-  name: string;
-  avatar: string;
-  goal: string;
-  duration: number;
-  badges: string[];
-  streak: number;
-}
-
-const DEMO_CASES: UserCase[] = [
+// 虚拟激励用户 — 看起来像真实用户在坚持
+const MOCK_USER_CASES = [
   {
-    id: "1",
+    emoji: "🏃",
     name: "阿杰",
-    avatar: "🏃",
     goal: "100天跑完半马",
-    duration: 100,
-    badges: ["🌱", "🔥", "⭐", "🏆"],
-    streak: 100,
+    days: 23,
+    detail: "累计跑了87公里",
   },
   {
-    id: "2",
+    emoji: "📚",
     name: "小雅",
-    avatar: "📚",
     goal: "30天读完《原则》",
-    duration: 30,
-    badges: ["🌱", "🔥", "⭐"],
-    streak: 30,
+    days: 12,
+    detail: "读完了14章，做了18条笔记",
   },
   {
-    id: "3",
+    emoji: "🎸",
     name: "老王",
-    avatar: "🎸",
     goal: "60天学会吉他弹唱",
-    duration: 60,
-    badges: ["🌱", "🔥", "⭐"],
-    streak: 45,
-  },
-  {
-    id: "4",
-    name: "阿美",
-    avatar: "💪",
-    goal: "28天养成早起习惯",
-    duration: 28,
-    badges: ["🌱", "🔥"],
-    streak: 28,
-  },
-  {
-    id: "5",
-    name: "大卫",
-    avatar: "🧘",
-    goal: "45天学会冥想",
-    duration: 45,
-    badges: ["🌱", "🔥", "⭐"],
-    streak: 45,
+    days: 45,
+    detail: "已学会5首歌，正在练第6首",
   },
 ];
 
 export default function UserCases() {
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [stats, setStats] = useState({ goals: 0, completedDays: 0 });
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setActiveIndex((prev) => (prev + 1) % DEMO_CASES.length);
-    }, 5000);
-    return () => clearInterval(interval);
+    setMounted(true);
+    const goals = loadGoals();
+    const completedDays = goals.reduce(
+      (acc, g) => acc + g.tasks.filter((t) => t.completed).length,
+      0
+    );
+    setStats({ goals: goals.length, completedDays });
   }, []);
 
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm text-[var(--text-secondary)]">他们都在悄悄变好</h3>
-        <div className="flex gap-1">
-          {DEMO_CASES.map((_, i) => (
-            <span
-              key={i}
-              className={`h-1 rounded-full transition-all ${
-                i === activeIndex ? "w-4 bg-[var(--accent)]" : "w-1.5 bg-[var(--text-tertiary)]"
-              }`}
-            />
-          ))}
+  if (!mounted) return null;
+
+  // 用户有目标时 → 显示自己的真实数据
+  if (stats.goals > 0) {
+    return (
+      <div className="bg-[var(--bg-secondary)] rounded-2xl p-5">
+        <p className="text-xs text-center text-[var(--text-tertiary)] mb-3">
+          📊 你的数据
+        </p>
+        <div className="flex justify-around">
+          <div className="text-center">
+            <p className="text-2xl font-bold text-[var(--accent)]">{stats.goals}</p>
+            <p className="text-xs text-[var(--text-secondary)]">个目标</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-[var(--accent)]">{stats.completedDays}</p>
+            <p className="text-xs text-[var(--text-secondary)]">天打卡</p>
+          </div>
         </div>
       </div>
+    );
+  }
 
-      <div className="relative h-[130px] overflow-hidden">
-        {DEMO_CASES.map((userCase, i) => {
-          const offset = (i - activeIndex + DEMO_CASES.length) % DEMO_CASES.length;
-          const isActive = offset === 0;
-          const translateX = offset === 0 ? 0 : offset < DEMO_CASES.length / 2 ? 120 : -120;
-          const scale = isActive ? 1 : 0.85;
-          const opacity = isActive ? 1 : 0.4;
-
-          return (
-            <div
-              key={userCase.id}
-              className="absolute inset-0 transition-all duration-500 ease-out"
-              style={{
-                transform: `translateX(${translateX}%) scale(${scale})`,
-                opacity,
-                zIndex: DEMO_CASES.length - Math.abs(offset),
-              }}
-            >
-              <div className="bg-[var(--bg-card)] rounded-2xl p-4 h-full border border-[var(--border)]" style={{ boxShadow: 'var(--shadow-sm)' }}>
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="text-3xl">{userCase.avatar}</span>
-                  <div className="flex-1">
-                    <p className="font-medium text-[var(--text-primary)]">{userCase.name}</p>
-                    <p className="text-xs text-[var(--text-secondary)]">
-                      🔥 已坚持 {userCase.streak} 天
-                    </p>
-                  </div>
-                </div>
-                <p className="text-sm text-[var(--text-secondary)] mb-2 line-clamp-1">"{userCase.goal}"</p>
-                <div className="flex items-center justify-between">
-                  <div className="flex gap-1">
-                    {userCase.badges.map((badge, j) => (
-                      <span key={j} className="text-sm">{badge}</span>
-                    ))}
-                  </div>
-                  <span className="text-xs text-[var(--text-tertiary)]">
-                    {userCase.duration}天计划
-                  </span>
-                </div>
-              </div>
-            </div>
-          );
-        })}
+  // 用户没有目标时 → 显示激励性虚拟用户
+  return (
+    <div className="bg-[var(--bg-secondary)] rounded-2xl p-4 space-y-3">
+      <div className="text-center mb-2">
+        <p className="text-sm font-medium text-[var(--text-secondary)]">他们都在悄悄变好</p>
       </div>
-
-      <p className="text-xs text-center text-[var(--text-tertiary)]">
+      <div className="space-y-2">
+        {MOCK_USER_CASES.map((user, idx) => (
+          <div
+            key={idx}
+            className="bg-[var(--bg-card)] rounded-xl p-3 border border-[var(--border)] flex items-start gap-3"
+          >
+            <div className="w-10 h-10 rounded-full bg-[var(--accent)] flex items-center justify-center text-lg">
+              {user.emoji}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-medium text-[var(--text-primary)]">{user.name}</span>
+                <span className="text-xs bg-[var(--accent)]/20 text-[var(--accent)] px-1.5 py-0.5 rounded font-medium">
+                  🔥 已坚持 {user.days} 天
+                </span>
+              </div>
+              <p className="text-xs text-[var(--text-tertiary)] mt-0.5 truncate">"{user.goal}"</p>
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5">{user.detail}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-center text-[var(--text-tertiary)] pt-1">
         你的故事也可以在这里
       </p>
     </div>

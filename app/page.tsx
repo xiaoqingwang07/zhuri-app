@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { Goal, DayTask, Badge, SupervisionUser, BADGES, MAX_GOALS } from "@/lib/types";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Goal, DayTask, Badge, BADGES, MAX_GOALS } from "@/lib/types";
 import {
   loadGoals,
   saveGoals,
@@ -10,14 +10,13 @@ import {
   checkIn,
   useReviveCard,
   generateDefaultTasks,
-  loadSupervisionUsers,
-  updateUserCheckIn,
 } from "@/lib/store";
 import { generateTasksWithAI, loadDataFromCloud, getDeviceIdAsync } from "@/lib/ai";
 import Certificate from "@/components/Certificate";
 import Onboarding from "@/components/Onboarding";
 import InviteModal from "@/components/InviteModal";
 import UserCases from "@/components/UserCases";
+import { useSocialSupervision } from "@/lib/useSocial";
 
 type Tab = "today" | "calendar" | "supervision" | "settings";
 
@@ -32,7 +31,7 @@ export default function Home() {
   const [justCheckedIn, setJustCheckedIn] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [isOnboarding, setIsOnboarding] = useState(false);
-  const [supervisionUsers, setSupervisionUsers] = useState<SupervisionUser[]>([]);
+
 
   // P2-6: Manual theme toggle
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
@@ -158,6 +157,17 @@ export default function Home() {
 
   const activeGoal = goals.find((g) => g.id === activeGoalId) || null;
 
+  // Social supervision hook
+  const {
+    members: socialMembers,
+    group,
+    joinGroup,
+    poke,
+    createInviteLink,
+    userId: socialUserId,
+    userName: socialUserName,
+  } = useSocialSupervision(activeGoal);
+
   // Check if first time user
   useEffect(() => {
     const initApp = async () => {
@@ -187,7 +197,6 @@ export default function Home() {
           setActiveGoalId(loadedGoals[0].id);
         }
       }
-      setSupervisionUsers(loadSupervisionUsers());
 
       // P1: Show cloud banner once
       const bannerSeen = localStorage.getItem("zhuri_cloud_banner_seen");
@@ -262,19 +271,24 @@ export default function Home() {
     } catch (err: any) {
       clearTimeout(timeoutId);
       clearInterval(countdownId);
-      
-      const isAbort = err?.name === "AbortError" || err?.message?.includes("aborted");
-      
+
+      // 第一次失败，静默重试一次
       if (!isAutoRetry) {
-        console.warn("AI generation timed out/failed, attempting one silent retry...");
-        return createGoal(true); // Retry once silently
+        console.warn("AI generation failed, attempting one silent retry...");
+        return createGoal(true);
       }
 
-      console.error("AI final attempt failed:", err);
-      setIsCreating(false);
+      // 重试也失败，启用本地兜底
+      console.warn("AI彻底失败，启用本地模板降级...", err);
+      const errorMsg = err?.name === "AbortError" || err?.message?.includes("aborted")
+        ? "AI响应超时，已切换为默认任务"
+        : `AI生成失败：${err?.message || "未知错误"}，已切换为默认任务`;
+      setError(errorMsg);
       setIsFallback(true);
-      setError(isAbort ? "网络太拥挤，AI 没赶过来" : "AI 脑子暂时卡住了");
-      setPendingTasks(null);
+      setIsCreating(false);
+      const bareContent = goalName.trim();
+      const fallbackTasks = generateDefaultTasks(totalDays, bareContent);
+      setPendingTasks(fallbackTasks);
       setCreatingStep("confirm");
     }
   };
@@ -343,14 +357,14 @@ export default function Home() {
     }
   };
 
-  const handleUserCheckIn = (userId: string) => {
-    const updated = updateUserCheckIn(userId, true);
-    setSupervisionUsers(updated);
-  };
-
   const todayTasks = activeGoal?.tasks.filter((t) => t.date === new Date().toISOString().split("T")[0]) || [];
   const completedToday = todayTasks.filter((t) => t.completed).length;
   const progressPercent = activeGoal ? Math.round((activeGoal.tasks.filter((t) => t.completed).length / activeGoal.tasks.length) * 100) : 0;
+
+  const completeOnboarding = () => {
+    localStorage.setItem("zhuri_onboarding", "1");
+    setIsOnboarding(false);
+  };
 
   // Onboarding
   if (isOnboarding) {
@@ -385,7 +399,7 @@ export default function Home() {
                 <div className="h-2 bg-[var(--bg-primary)] rounded-full overflow-hidden">
                   <div
                     className="h-full bg-[var(--accent)] rounded-full transition-all duration-1000 ease-linear"
-                    style={{ width: `${((30 - loadingCountdown) / 30) * 100}%` }}
+                    style={{ width: `${Math.max(0, Math.min(100, ((30 - loadingCountdown) / 30) * 100))}%` }}
                   />
                 </div>
                 <div className="flex justify-between text-[10px] text-[var(--text-tertiary)] uppercase tracking-wider">
@@ -560,12 +574,17 @@ export default function Home() {
               <div>
                 <label className="block text-sm text-[var(--text-secondary)] mb-2">计划天数</label>
                 <input
-                  type="number"
-                  value={totalDays}
-                  onChange={(e) => setTotalDays(Number(e.target.value))}
+                  type="text"
+                  inputMode="numeric"
+                  value={totalDays || ""}
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/\D/g, "");
+                    if (raw === "") { setTotalDays(3); return; }
+                    const val = parseInt(raw, 10);
+                    if (!isNaN(val)) { setTotalDays(Math.min(365, Math.max(3, val))); }
+                  }}
+                  placeholder="输入天数"
                   className="w-full bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-                  min={3}
-                  max={365}
                 />
               </div>
 
@@ -584,7 +603,7 @@ export default function Home() {
 
               {/* Main button - disabled when empty or creating */}
               <button
-                onClick={createGoal}
+                onClick={() => createGoal()}
                 disabled={isCreating || !goalName.trim()}
                 style={{
                   backgroundColor: isCreating || !goalName.trim() ? "#444" : undefined,
@@ -1110,12 +1129,11 @@ export default function Home() {
         {activeTab === "supervision" && (
           <div className="space-y-4 slide-up">
             <div className="text-center py-4">
-              <h2 className="text-xl font-bold">👥 监督团</h2>
+              <h2 className="text-xl font-bold">监督团</h2>
               <p className="text-sm text-[var(--text-secondary)]">一个人走得快，一群人走得远</p>
             </div>
 
-            {supervisionUsers.length === 0 ? (
-              /* P0-fix: Replace fake users with honest empty state + invite CTA */
+            {socialMembers.length === 0 ? (
               <div className="bg-[var(--bg-secondary)] rounded-2xl p-8 text-center space-y-4">
                 <div className="text-5xl">🤝</div>
                 <div>
@@ -1125,7 +1143,13 @@ export default function Home() {
                   </p>
                 </div>
                 <button
-                  onClick={() => setShowInvite(true)}
+                  onClick={async () => {
+                    const link = createInviteLink();
+                    if (link) {
+                      await navigator.clipboard.writeText(link);
+                      alert("邀请链接已复制，发送给朋友吧！");
+                    }
+                  }}
                   className="px-6 py-3 bg-[var(--accent)] text-white font-medium rounded-xl hover:bg-[var(--accent-light)] transition-colors"
                 >
                   邀请好友加入 →
@@ -1134,32 +1158,52 @@ export default function Home() {
               </div>
             ) : (
               <div className="space-y-3">
-                {supervisionUsers.map((user) => (
-                  <div key={user.id} className="bg-[var(--bg-secondary)] rounded-xl p-4">
-                    <div className="flex items-center gap-3">
-                      <span className="text-3xl">{user.avatar}</span>
-                      <div className="flex-1">
-                        <p className="font-semibold">{user.name}</p>
-                        <p className="text-xs text-[var(--text-secondary)]">
-                          🔥 连续 {user.streak} 天 · {user.todayCompleted ? "今日已完成" : "等待打卡"}
-                        </p>
+                {socialMembers.map((member) => {
+                  const today = new Date().toISOString().split("T")[0];
+                  const todayCompleted = member.lastCheckIn === today;
+                  return (
+                    <div key={member.userId} className="bg-[var(--bg-secondary)] rounded-xl p-4">
+                      <div className="flex items-center gap-3">
+                        <span className="text-3xl">{member.userId === socialUserId ? "🙋" : "👤"}</span>
+                        <div className="flex-1">
+                          <p className="font-semibold">
+                            {member.userName}
+                            {member.userId === socialUserId && <span className="ml-1 text-xs text-[var(--accent)]">（本人）</span>}
+                          </p>
+                          <p className="text-xs text-[var(--text-secondary)]">
+                            🔥 连续 {member.streak} 天 · {todayCompleted ? "今日已完成" : "等待打卡"}
+                          </p>
+                        </div>
+                        {!todayCompleted && member.userId !== socialUserId && (
+                          <button
+                            onClick={() => poke(member.userId, member.userName)}
+                            className="px-4 py-2 bg-[var(--accent)] text-[var(--text-primary)] rounded-lg text-sm font-medium hover:bg-[var(--accent-light)] transition-colors"
+                          >
+                            戳一下TA
+                          </button>
+                        )}
+                        {todayCompleted && (
+                          <span className="text-2xl">✅</span>
+                        )}
                       </div>
-                      {!user.todayCompleted && (
-                        <button
-                          onClick={() => handleUserCheckIn(user.id)}
-                          className="px-4 py-2 bg-[var(--accent)] text-[var(--text-primary)] rounded-lg text-sm font-medium hover:bg-[var(--accent-light)] transition-colors"
-                        >
-                          戳一下TA
-                        </button>
-                      )}
-                      {user.todayCompleted && (
-                        <span className="text-2xl">✅</span>
-                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
+                {/* Group stats */}
+                <div className="bg-[var(--bg-primary)] rounded-xl p-3 border border-[var(--border)]">
+                  <p className="text-xs text-[var(--text-secondary)]">
+                    共 {socialMembers.length} 人参与 · 已连续打卡{" "}
+                    {Math.max(...socialMembers.map((m) => m.streak), 0)} 天最高
+                  </p>
+                </div>
                 <button
-                  onClick={() => setShowInvite(true)}
+                  onClick={async () => {
+                    const link = createInviteLink();
+                    if (link) {
+                      await navigator.clipboard.writeText(link);
+                      alert("邀请链接已复制，发送给朋友吧！");
+                    }
+                  }}
                   className="w-full py-3 bg-[var(--accent)]/10 text-[var(--accent)] rounded-xl text-sm font-medium hover:bg-[var(--accent)]/20 transition-colors"
                 >
                   ＋ 继续邀请朋友

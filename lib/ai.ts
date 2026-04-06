@@ -28,9 +28,16 @@ export async function generateTasksWithAI(
   if (!response.ok) throw new Error("AI的大脑卡住了，请重试");
 
   const data = await response.json();
-  const tasksData = data.tasks || data.days || data || [];
-  
-  return (Array.isArray(tasksData) ? tasksData : []).map((t: any, index: number) => ({
+  let tasksData = [];
+  if (Array.isArray(data)) {
+    tasksData = data;
+  } else if (data.tasks) {
+    tasksData = data.tasks;
+  } else if (data.days) {
+    tasksData = data.days;
+  }
+
+  return tasksData.map((t: any, index: number) => ({
     day: t.day || index + 1,
     date: new Date(Date.now() + index * 86400000).toISOString().split("T")[0],
     task: t.task || t.content || "计划进度中",

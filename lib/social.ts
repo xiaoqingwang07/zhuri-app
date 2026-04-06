@@ -10,7 +10,7 @@
  * 3. 用户通过邀请链接加入群组
  */
 
-const SOCIAL_GIST_ID = "YOUR_GIST_ID_HERE"; // 替换为你的Gist ID
+const SOCIAL_GIST_ID = "5bda44f5329ae05a895ea741a8536dfb"; // 替换为你的Gist ID
 const GH_API = "https://api.github.com/gists";
 
 // GitHub Token用于匿名提交（需要用户在GitHub有账号）
