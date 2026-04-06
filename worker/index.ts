@@ -2,6 +2,14 @@
  * 逐日App AI代理 - 100+任务类型全覆盖
  */
 
+// Type shim for Cloudflare KV — only used during local TS builds.
+// At runtime Cloudflare injects the real KVNamespace automatically.
+declare interface KVNamespace {
+  get(key: string): Promise<string | null>;
+  put(key: string, value: string, options?: { expirationTtl?: number; metadata?: Record<string, unknown> }): Promise<void>;
+  delete(key: string): Promise<void>;
+}
+
 const SILICONFLOW_API_URL = "https://api.siliconflow.cn/v1/chat/completions";
 
 const SYSTEM_PROMPT = `你是目标拆解教练。用户会给你一个目标和天数，你要生成最合理的每日任务。
