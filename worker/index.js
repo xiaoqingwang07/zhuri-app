@@ -115,7 +115,13 @@ export default {
         }),
       });
 
-      if (!aiResponse.ok) return new Response("AI API Busy", { status: 503, headers: corsHeaders });
+      if (!aiResponse.ok) {
+        const errorDetail = await aiResponse.text();
+        return new Response(JSON.stringify({ error: `AI API error: ${errorDetail.substring(0, 50)}` }), {
+          status: aiResponse.status,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
 
       // 把 AI 的流直接转发给前端
       const { readable, writable } = new TransformStream();
