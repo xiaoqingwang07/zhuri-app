@@ -1,30 +1,10 @@
 import { DayTask } from "./types";
 
-/**
- * P0-1 Security Fix: API Key is NO LONGER hardcoded in frontend.
- * 
- * AI calls go through a proxy Worker to protect the key.
- * Worker URL must be set via the VITE_WORKER_URL environment variable.
- * 
- * To deploy your own worker:
- * 1. Create a free Cloudflare account
- * 2. Deploy the /worker directory using: npx wrangler deploy
- * 3. Set VITE_WORKER_URL=https://your-worker.your-subdomain.workers.dev in your .env
- */
-
-// P0-1: Worker Proxy URL - protect your keys on the backend
 const WORKER_URL = "https://zhuri-ai-proxy.xiaoqingwang07.workers.dev";
-
-/**
- * Get or create a persistent unique Device ID for cloud sync.
- * Stored in IndexedDB which survives localStorage/cache clears.
- * Falls back to localStorage as secondary storage.
- */
 const DEVICE_ID_KEY = "zhuri_device_id";
 const IDB_DB_NAME = "zhuri_persist";
 const IDB_STORE_NAME = "meta";
 
-// In-memory cache so we don't hit IDB on every request
 let _deviceIdCache: string | null = null;
 
 async function openMetaDB(): Promise<IDBDatabase> {
@@ -32,7 +12,7 @@ async function openMetaDB(): Promise<IDBDatabase> {
     const req = indexedDB.open(IDB_DB_NAME, 1);
     req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE_NAME);
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onerror = () => resolve(req.error);
   });
 }
 
@@ -60,39 +40,26 @@ async function idbSet(key: string, value: string): Promise<void> {
   } catch { /* silent fail */ }
 }
 
-/** Async version — always returns a valid ID. Call this at app startup. */
 export async function getDeviceIdAsync(): Promise<string> {
   if (typeof window === "undefined") return "server";
   if (_deviceIdCache) return _deviceIdCache;
-
-  // 1. Try IndexedDB first (survives cache clears)
   let id = await idbGet(DEVICE_ID_KEY);
-
-  // 2. Fall back to localStorage (for old users migrating)
   if (!id) id = localStorage.getItem(DEVICE_ID_KEY);
-
-  // 3. Generate a new one
   if (!id) id = crypto.randomUUID();
-
-  // Persist in both storages for redundancy
   _deviceIdCache = id;
   await idbSet(DEVICE_ID_KEY, id);
   localStorage.setItem(DEVICE_ID_KEY, id);
-
   return id;
 }
 
-/** Sync version — uses in-memory cache, initialised by getDeviceIdAsync() */
 export function getDeviceId(): string {
   if (typeof window === "undefined") return "server";
-  if (_deviceIdCache) return _deviceIdCache;
-  // Last-resort sync fallback (pre-init path)
-  const id = localStorage.getItem(DEVICE_ID_KEY) ?? "uninitialised";
-  return id;
+  // Sync fallback
+  return _deviceIdCache || localStorage.getItem(DEVICE_ID_KEY) || "uninitialised";
 }
 
 /**
- * AI: Generate tasks for a goal
+ * 核心升级：鲁棒的流式 JSON 解析器
  */
 export async function generateTasksWithAI(
   goal: string,
@@ -101,130 +68,83 @@ export async function generateTasksWithAI(
 ): Promise<DayTask[]> {
   const response = await fetch(WORKER_URL, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-device-id": getDeviceId(),
-    },
+    headers: { "Content-Type": "application/json", "x-device-id": getDeviceId() },
     body: JSON.stringify({ goal, totalDays }),
     signal,
   });
 
-  if (!response.ok) {
-    throw new Error(`AI服务暂时不可用 (${response.status})`);
-  }
+  if (!response.ok) throw new Error("AI服务暂时不可用");
 
   const reader = response.body?.getReader();
   if (!reader) throw new Error("无法读取AI响应流");
 
   const decoder = new TextDecoder();
   let fullText = "";
-  let accumulatedTasks: any[] = [];
+  let buffer = ""; // 用于处理碎块的缓冲区
   
-  // We need to find the latest valid task objects in the stream
-  // Since it's a JSON array, we can use a regex to look for complete objects
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
 
-    const chunk = decoder.decode(value);
-    // SiliconFlow/SSE format handling
-    const lines = chunk.split("\n");
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    
+    // 最后一行可能是不完整的，留给下一轮处理
+    buffer = lines.pop() || "";
+
     for (const line of lines) {
-      if (line.startsWith("data: ")) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("data: ")) {
+        const dataStr = trimmed.slice(6);
+        if (dataStr === "[DONE]") continue;
         try {
-          const data = JSON.parse(line.slice(6));
-          const delta = data.choices[0]?.delta?.content || "";
-          fullText += delta;
-        } catch (e) { /* ignore parse errors for partial chunks */ }
+          const data = JSON.parse(dataStr);
+          fullText += data.choices[0]?.delta?.content || "";
+        } catch (e) { /* 忽略不完整的 JSON 块 */ }
       }
     }
-    
-    // Attempt to extract complete tasks from the partial fullText
-    // Tasks look like {"day":1,"task":"...","pages":"...","type":"..."}
-    try {
-      const taskPattern = /\{"day":\d+,"task":"[^"]+","pages":"[^"]*","type":"[^"]+"\}/g;
-      const matches = fullText.match(taskPattern);
-      if (matches) {
-        accumulatedTasks = matches.map(m => JSON.parse(m));
-      }
-    } catch (e) { /* ignore */ }
   }
 
-  // After stream completes, if we have tasks, use them
-  if (accumulatedTasks.length > 0) {
-    return accumulatedTasks.map((t, index) => {
-      const date = new Date();
-      date.setDate(date.getDate() + index);
-      return {
-        day: t.day || index + 1,
-        date: date.toISOString().split("T")[0],
-        task: t.task || t.content || "",
-        pages: t.pages || "",
-        type: t.type || "reading",
-        completed: false,
-      };
-    });
-  }
-
-  // Final fallback: try to parse the entire message if the regex missed it
+  // 清洗最终结果（去掉 AI 可能带出的 Markdown 标记）
   try {
     const jsonMatch = fullText.match(/\{[\s\S]*\}/);
-    const data = JSON.parse(jsonMatch ? jsonMatch[0] : fullText);
+    const rawJson = jsonMatch ? jsonMatch[0] : fullText;
+    const data = JSON.parse(rawJson);
     const tasksData = data.tasks || data.days || (Array.isArray(data) ? data : []);
     
-    return tasksData.map((t: any, index: number) => {
-      const date = new Date();
-      date.setDate(date.getDate() + index);
-      return {
-        day: t.day || index + 1,
-        date: date.toISOString().split("T")[0],
-        task: t.task || t.content || "",
-        pages: t.pages || "",
-        type: t.type || "reading",
-        completed: false,
-      };
-    });
+    return tasksData.map((t: any, index: number) => ({
+      day: t.day || index + 1,
+      date: new Date(Date.now() + index * 86400000).toISOString().split("T")[0],
+      task: t.task || t.content || "执行目标",
+      pages: t.pages || "",
+      type: t.type || "other",
+      completed: false,
+    }));
   } catch (e) {
+    console.error("Parse Error. Raw text:", fullText);
     throw new Error("AI生成的格式解析失败，请再试一次");
   }
 }
 
-/**
- * CLOUD: Sync current goals/data to Cloudflare KV
- */
 export async function saveDataToCloud(data: any): Promise<boolean> {
   try {
     const response = await fetch(`${WORKER_URL}/sync`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-device-id": getDeviceId(),
-      },
+      headers: { "Content-Type": "application/json", "x-device-id": getDeviceId() },
       body: JSON.stringify(data),
     });
     return response.ok;
-  } catch (err) {
-    console.error("Cloud sync failed:", err);
-    return false;
-  }
+  } catch (err) { return false; }
 }
 
-/**
- * CLOUD: Load goals/data from Cloudflare KV
- */
 export async function loadDataFromCloud(): Promise<any> {
   try {
     const response = await fetch(`${WORKER_URL}/get`, {
       method: "GET",
-      headers: {
-        "x-device-id": getDeviceId(),
-      },
+      headers: { "x-device-id": getDeviceId() },
     });
     if (!response.ok) return null;
     const data = await response.json();
     return (data && Object.keys(data).length > 0) ? data : null;
-  } catch (err) {
-    console.error("Cloud loading failed:", err);
-    return null;
-  }
+  } catch (err) { return null; }
 }
