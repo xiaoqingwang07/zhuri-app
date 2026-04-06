@@ -225,10 +225,9 @@ export default function Home() {
     }
 
     setIsCreating(true);
-    setCreatingStep("loading");
     setError("");
-    const TIMEOUT_MS = 30000;
-    setLoadingCountdown(30);
+    const TIMEOUT_MS = 55000;
+    setLoadingCountdown(55);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
