@@ -1293,16 +1293,16 @@ export default function Home() {
             <h2 className="text-lg font-bold">⚙️ 设置</h2>
 
             {/* P2-6: Theme Toggle */}
-            <div className="bg-[var(--bg-card)] rounded-2xl p-4 border border-[var(--border)]" style={{ boxShadow: 'var(--shadow-sm)' }}>
-              <p className="text-sm text-[var(--text-secondary)] mb-3">外观模式</p>
-              <div className="flex bg-[var(--bg-primary)] rounded-xl p-1">
+            <div className="bg-[var(--bg-card)] rounded-2xl p-5 shadow-card card-enter">
+              <p className="text-sm text-[var(--text-secondary)] mb-3 font-medium">外观模式</p>
+              <div className="flex bg-[var(--bg-secondary)] rounded-xl p-1.5">
                 {(['light', 'dark', 'system'] as const).map((t) => (
                   <button
                     key={t}
                     onClick={() => setTheme(t)}
-                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
+                    className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all btn-press ${
                       theme === t
-                        ? 'bg-[var(--accent)] text-white'
+                        ? 'bg-[var(--accent)] text-white shadow-sm'
                         : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                     }`}
                   >
@@ -1313,26 +1313,26 @@ export default function Home() {
             </div>
 
             {/* P1-1: AI Key Configuration */}
-            <div className="bg-[var(--bg-card)] rounded-2xl p-4 border border-[var(--border)]" style={{ boxShadow: 'var(--shadow-sm)' }}>
-              <div className="flex items-center justify-between mb-2">
+            <div className="bg-[var(--bg-card)] rounded-2xl p-5 shadow-card card-enter">
+              <div className="flex items-center justify-between mb-3">
                 <div>
-                  <p className="text-sm font-medium">🤖 AI 任务拆解</p>
-                  <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                  <p className="text-sm font-semibold flex items-center gap-1.5">🤖 AI 任务拆解</p>
+                  <p className="text-xs text-[var(--text-secondary)] mt-1">
                     {customApiKey ? "✅ 已配置自定义 Key" : "🔥 使用内置免费额度（已包含）"}
                   </p>
                 </div>
               </div>
               {customApiKey ? (
-                <div className="flex gap-2 mt-3">
+                <div className="flex gap-2">
                   <button
                     onClick={() => setShowApiKeyInput(true)}
-                    className="flex-1 py-2 bg-[var(--bg-primary)] text-[var(--text-secondary)] rounded-lg text-sm hover:text-[var(--text-primary)] transition-colors"
+                    className="flex-1 py-2.5 bg-[var(--bg-secondary)] text-[var(--text-secondary)] rounded-xl text-sm hover:text-[var(--text-primary)] transition-colors btn-press"
                   >
                     更换 Key
                   </button>
                   <button
                     onClick={clearApiKey}
-                    className="py-2 px-3 bg-[var(--danger)]/10 text-[var(--danger)] rounded-lg text-sm hover:bg-[var(--danger)]/20 transition-colors"
+                    className="py-2.5 px-4 bg-[var(--danger)]/10 text-[var(--danger)] rounded-xl text-sm hover:bg-[var(--danger)]/20 transition-colors btn-press"
                   >
                     清除
                   </button>
@@ -1343,7 +1343,7 @@ export default function Home() {
                     ref={apiKeyInputRef}
                     type="password"
                     placeholder="粘贴你的 API Key"
-                    className="w-full bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+                    className="w-full bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/30 focus:border-[var(--accent)] transition-all"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") saveApiKey((e.target as HTMLInputElement).value.trim());
                       if (e.key === "Escape") setShowApiKeyInput(false);
@@ -1352,13 +1352,13 @@ export default function Home() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => apiKeyInputRef.current && saveApiKey(apiKeyInputRef.current.value.trim())}
-                      className="flex-1 py-2 bg-[var(--accent)] text-white rounded-lg text-sm font-medium"
+                      className="flex-1 py-2.5 bg-[var(--accent)] text-white rounded-xl text-sm font-semibold btn-press"
                     >
                       保存
                     </button>
                     <button
                       onClick={() => setShowApiKeyInput(false)}
-                      className="py-2 px-3 bg-[var(--bg-primary)] text-[var(--text-secondary)] rounded-lg text-sm"
+                      className="py-2.5 px-4 bg-[var(--bg-secondary)] text-[var(--text-secondary)] rounded-xl text-sm btn-press"
                     >
                       取消
                     </button>
@@ -1371,28 +1371,28 @@ export default function Home() {
                 <div className="mt-3 flex gap-2">
                   <button
                     onClick={() => setShowApiKeyInput(true)}
-                    className="flex-1 py-2 bg-[var(--accent)]/10 text-[var(--accent)] rounded-lg text-sm font-medium hover:bg-[var(--accent)]/20 transition-colors"
+                    className="flex-1 py-2.5 bg-[var(--accent)]/10 text-[var(--accent)] rounded-xl text-sm font-semibold hover:bg-[var(--accent)]/20 transition-colors btn-press"
                   >
                     自带 API Key
                   </button>
                 </div>
               )}
               {!customApiKey && (
-                <p className="text-xs text-[var(--text-tertiary)] mt-2">
+                <p className="text-xs text-[var(--text-tertiary)] mt-3">
                   💡 内置额度稳定可用，自带 Key 可享受更高限额
                 </p>
               )}
             </div>
 
             {/* P2-7: Notification Reminder */}
-            <div className="bg-[var(--bg-card)] rounded-2xl p-4 border border-[var(--border)]" style={{ boxShadow: 'var(--shadow-sm)' }}>
-              <div className="flex items-center justify-between mb-3">
+            <div className="bg-[var(--bg-card)] rounded-2xl p-5 shadow-card card-enter">
+              <div className="flex items-center justify-between mb-4">
                 <div>
-                  <p className="text-sm font-medium">📬 21:00 打卡提醒</p>
-                  <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                  <p className="text-sm font-semibold">📬 21:00 打卡提醒</p>
+                  <p className="text-xs text-[var(--text-secondary)] mt-1">
                     通知权限: <span className={
-                      notificationPermission === 'granted' ? 'text-[var(--success)]' :
-                      notificationPermission === 'denied' ? 'text-[var(--danger)]' :
+                      notificationPermission === 'granted' ? 'text-[var(--success)] font-medium' :
+                      notificationPermission === 'denied' ? 'text-[var(--danger)] font-medium' :
                       'text-[var(--text-secondary)]'
                     }>{notificationPermission === 'granted' ? '已授权' : notificationPermission === 'denied' ? '已拒绝' : '未授权'}</span>
                   </p>
@@ -1407,7 +1407,7 @@ export default function Home() {
                         localStorage.setItem('zhuri_reminder_enabled', 'true');
                       }
                     }}
-                    className="px-4 py-2 bg-[var(--accent)] text-white rounded-lg text-sm font-medium"
+                    className="px-5 py-2.5 bg-[var(--accent)] text-white rounded-xl text-sm font-semibold btn-press"
                   >
                     开启
                   </button>
@@ -1420,10 +1420,10 @@ export default function Home() {
                       setReminderEnabled(newVal);
                       localStorage.setItem('zhuri_reminder_enabled', String(newVal));
                     }}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors btn-press ${
                       reminderEnabled
                         ? 'bg-[var(--success)] text-white'
-                        : 'bg-[var(--bg-primary)] text-[var(--text-secondary)]'
+                        : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)]'
                     }`}
                   >
                     {reminderEnabled ? '已开启' : '已关闭'}
@@ -1431,14 +1431,14 @@ export default function Home() {
                 )}
               </div>
               {/* iOS tip */}
-              <p className="text-xs text-[var(--text-tertiary)] mt-2">
+              <p className="text-xs text-[var(--text-tertiary)]">
                 💡 iOS用户：Safari打开 → 分享 → 添加至主屏幕 → 系统会询问是否允许通知授权
               </p>
             </div>
 
             {/* P2-8: Data Export/Import */}
-            <div className="bg-[var(--bg-card)] rounded-2xl p-4 border border-[var(--border)]" style={{ boxShadow: 'var(--shadow-sm)' }}>
-              <p className="text-sm text-[var(--text-secondary)] mb-3">数据管理</p>
+            <div className="bg-[var(--bg-card)] rounded-2xl p-5 shadow-card card-enter">
+              <p className="text-sm text-[var(--text-secondary)] mb-3 font-medium">数据管理</p>
               <div className="flex gap-3">
                 <button
                   onClick={() => {
@@ -1458,7 +1458,7 @@ export default function Home() {
                     URL.revokeObjectURL(url);
                     console.log('✅ 数据导出 完成');
                   }}
-                  className="flex-1 py-3 bg-[var(--bg-primary)] text-[var(--text-primary)] rounded-xl font-medium hover:bg-[var(--accent)]/10 transition-colors text-sm"
+                  className="flex-1 py-3 bg-[var(--bg-secondary)] text-[var(--text-primary)] rounded-xl font-medium hover:bg-[var(--accent)]/10 transition-colors text-sm btn-press"
                 >
                   📤 导出数据
                 </button>
@@ -1466,7 +1466,7 @@ export default function Home() {
                   onClick={() => {
                     fileInputRef.current?.click();
                   }}
-                  className="flex-1 py-3 bg-[var(--bg-primary)] text-[var(--text-primary)] rounded-xl font-medium hover:bg-[var(--accent)]/10 transition-colors text-sm"
+                  className="flex-1 py-3 bg-[var(--bg-secondary)] text-[var(--text-primary)] rounded-xl font-medium hover:bg-[var(--accent)]/10 transition-colors text-sm btn-press"
                 >
                   📥 导入数据
                 </button>
@@ -1499,10 +1499,10 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="bg-[var(--bg-card)] rounded-2xl p-4 space-y-4 border border-[var(--border)]" style={{ boxShadow: 'var(--shadow-sm)' }}>
+            <div className="bg-[var(--bg-card)] rounded-2xl p-5 space-y-4 shadow-card">
               <button
                 onClick={handleReset}
-                className="w-full py-3 bg-[var(--danger)]/10 text-[var(--danger)] rounded-xl font-medium hover:bg-[var(--danger)]/20 transition-colors"
+                className="w-full py-3 bg-[var(--danger)]/10 text-[var(--danger)] rounded-xl font-semibold hover:bg-[var(--danger)]/20 transition-colors btn-press"
               >
                 重新开始
               </button>
@@ -1520,7 +1520,7 @@ export default function Home() {
             {/* History entry - P2-5 */}
             <button
               onClick={() => setActiveTab("calendar")}
-              className="w-full py-2 text-center text-sm text-[var(--accent)] hover:underline"
+              className="w-full py-3 text-center text-sm text-[var(--accent)] hover:underline"
             >
               📅 查看完整日历
             </button>
