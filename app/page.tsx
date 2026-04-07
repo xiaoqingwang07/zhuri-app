@@ -857,27 +857,40 @@ export default function Home() {
         {/* Today Tab */}
         {activeTab === "today" && activeGoal && (
           <div className="space-y-6 slide-up">
-            {/* Today Info - Human greeting */}
-            <div className="text-center py-4">
-              <p className="text-[var(--text-secondary)] text-sm">
+            {/* Hero 区域 - Apple 风格精致问候 */}
+            <div className="text-center py-6 px-4">
+              {/* 时段问候语 */}
+              <p className="text-[var(--text-secondary)] text-body tracking-wide">
                 {(() => {
                   const hour = new Date().getHours();
-                  if (hour < 6) return "夜深了，早点休息 🛋";
-                  if (hour < 9) return "早上好！☀️ 今天也要加油";
-                  if (hour < 12) return "上午好，状态不错 🌤️";
-                  if (hour < 14) return "中午好，吃饱了吗 🍜";
-                  if (hour < 18) return "下午好，别摸鱼哦 🤫";
-                  if (hour < 21) return "晚上好，夜深人静正适合 🍵";
-                  return "夜深了 🛋";
+                  if (hour < 6) return "夜深了，早点休息";
+                  if (hour < 9) return "早上好，今天也要加油";
+                  if (hour < 12) return "上午好，状态不错";
+                  if (hour < 14) return "中午好，吃饱了吗";
+                  if (hour < 18) return "下午好，专心做事";
+                  if (hour < 21) return "晚上好，静心专注";
+                  return "夜深了";
                 })()}
               </p>
-              <h2 className="text-xl font-semibold mt-2 text-[var(--text-primary)]">
+
+              {/* 主标题 */}
+              <h2 className="text-title mt-3 text-[var(--text-primary)] font-display">
                 {completedToday === todayTasks.length && todayTasks.length > 0
-                  ? "今天全做完了，厉害！🎉"
+                  ? "今天全部完成"
                   : activeGoal.status === "completed"
-                  ? "目标完成，你真棒 🏆"
-                  : `${activeGoal.name} · 今天要做这些事`}
+                  ? "目标已完成"
+                  : `${activeGoal.name}`}
               </h2>
+
+              {/* 进度指示 */}
+              {activeGoal.status !== "completed" && todayTasks.length > 0 && (
+                <div className="mt-3 inline-flex items-center gap-2 px-4 py-1.5 bg-[var(--bg-secondary)] rounded-full">
+                  <span className="text-label text-[var(--text-tertiary)]">今日进度</span>
+                  <span className="font-numeric font-semibold text-[var(--accent)]">
+                    {completedToday}/{todayTasks.length}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* P1-3: Revive card prompt */}
