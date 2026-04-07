@@ -771,16 +771,16 @@ export default function Home() {
 
       {/* Header */}
 
-      <header className="bg-[var(--bg-secondary)] px-4 py-4 sticky top-0 z-40">
+      <header className="bg-[var(--bg-primary)]/80 backdrop-blur-xl px-4 pt-4 pb-3 sticky top-0 z-40 border-b border-[var(--border)]">
         <div className="max-w-lg mx-auto flex items-center justify-between">
           <div>
-            <h1 className="font-display text-2xl font-bold text-[var(--accent)]">逐日</h1>
-            <p className="text-xs text-[var(--text-secondary)] truncate max-w-[150px]">{activeGoal?.name}</p>
+            <h1 className="font-display text-2xl font-bold text-[var(--accent)] tracking-tight">逐日</h1>
+            <p className="text-xs text-[var(--text-secondary)] truncate max-w-[160px] mt-0.5">{activeGoal?.name}</p>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-5">
             {/* Streak */}
             <div className="text-center">
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5">
                 <span className="text-2xl fire-flicker">🔥</span>
                 <span className="font-display text-2xl font-bold">{activeGoal?.streak || 0}</span>
               </div>
@@ -788,28 +788,29 @@ export default function Home() {
             </div>
             {/* Progress */}
             <div className="text-center">
-              <div className="relative w-12 h-12">
-                <svg className="w-12 h-12 transform -rotate-90">
+              <div className="relative w-14 h-14">
+                <svg className="w-14 h-14 transform -rotate-90">
                   <circle
-                    cx="24"
-                    cy="24"
-                    r="20"
-                    stroke="var(--bg-primary)"
-                    strokeWidth="4"
+                    cx="28"
+                    cy="28"
+                    r="23"
+                    stroke="var(--bg-secondary)"
+                    strokeWidth="4.5"
                     fill="none"
                   />
                   <circle
-                    cx="24"
-                    cy="24"
-                    r="20"
+                    cx="28"
+                    cy="28"
+                    r="23"
                     stroke="var(--accent)"
-                    strokeWidth="4"
+                    strokeWidth="4.5"
                     fill="none"
-                    strokeDasharray={`${progressPercent * 1.26} 126`}
+                    strokeDasharray={`${progressPercent * 1.44} 144`}
+                    strokeLinecap="round"
                     className="progress-bar"
                   />
                 </svg>
-                <span className="absolute inset-0 flex items-center justify-center text-xs font-bold">
+                <span className="absolute inset-0 flex items-center justify-center text-sm font-bold">
                   {progressPercent}%
                 </span>
               </div>
@@ -825,12 +826,12 @@ export default function Home() {
               <button
                 key={goal.id}
                 onClick={() => setActiveGoalId(goal.id)}
-                className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap transition-colors ${
+                className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap transition-all btn-press ${
                   goal.id === activeGoalId
-                    ? "bg-[var(--accent)] text-[var(--text-primary)]"
+                    ? "bg-[var(--accent)] text-white shadow-sm"
                     : goal.status === "completed"
                     ? "bg-[var(--success)]/20 text-[var(--success)]"
-                    : "bg-[var(--bg-primary)] text-[var(--text-secondary)]"
+                    : "bg-[var(--bg-secondary)] text-[var(--text-secondary)]"
                 }`}
               >
                 {goal.status === "completed" ? "✅ " : ""}{goal.name.slice(0, 10)}
@@ -843,7 +844,7 @@ export default function Home() {
                   setTotalDays(20);
                   setShowCreateForm(true);
                 }}
-                className="px-3 py-1.5 rounded-full text-xs whitespace-nowrap bg-[var(--accent)]/20 text-[var(--accent)] hover:bg-[var(--accent)]/30 transition-colors font-medium"
+                className="px-3 py-1.5 rounded-full text-xs whitespace-nowrap bg-[var(--accent)]/10 text-[var(--accent)] hover:bg-[var(--accent)]/20 transition-colors font-medium btn-press"
               >
                 ＋ 新目标
               </button>
