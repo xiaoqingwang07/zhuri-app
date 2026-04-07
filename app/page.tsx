@@ -1061,8 +1061,8 @@ export default function Home() {
 
         {/* Calendar Tab */}
         {activeTab === "calendar" && activeGoal && (
-          <div className="space-y-4 slide-up">
-            <div className="flex items-center justify-between mb-4">
+          <div className="space-y-5 slide-up">
+            <div className="flex items-center justify-between mb-2">
               <h2 className="text-lg font-bold">📅 任务总览</h2>
               <span className="text-sm text-[var(--text-secondary)]">
                 {activeGoal.tasks.filter((t) => t.completed).length} / {activeGoal.tasks.length} 天完成
@@ -1094,52 +1094,58 @@ export default function Home() {
               const behind = completed / total < (daysElapsed / total) - 0.05;
 
               return (
-                <div className="bg-[var(--bg-card)] rounded-2xl p-4 border border-[var(--border)]" style={{ boxShadow: 'var(--shadow-sm)' }}>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm text-[var(--text-secondary)]">📊 整体进度</span>
-                    <span className="text-sm font-semibold text-[var(--accent)]">
-                      {percent}% 完成
+                <div className="bg-[var(--bg-card)] rounded-2xl p-5 shadow-card card-enter">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-sm text-[var(--text-secondary)] font-medium">📊 整体进度</span>
+                    <span className="text-sm font-bold text-[var(--accent)]">
+                      {percent}%
                       {ahead && <span className="ml-1 text-[var(--success)]">· 领先</span>}
                       {behind && <span className="ml-1 text-[var(--danger)]">· 落后</span>}
                     </span>
                   </div>
                   {/* Progress bar */}
-                  <div className="h-2 bg-[var(--bg-primary)] rounded-full overflow-hidden mb-3">
+                  <div className="h-2.5 bg-[var(--bg-secondary)] rounded-full overflow-hidden mb-4">
                     <div
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        ahead ? "bg-[var(--success)]" : behind ? "bg-[var(--danger)]" : "bg-[var(--accent)]"
+                      className={`h-full rounded-full progress-bar ${
+                        ahead ? "bg-[var(--success)]" : behind ? "bg-[var(--danger)]" : "bg-gradient-to-r from-[var(--accent)] to-[var(--accent-light)]"
                       }`}
                       style={{ width: `${percent}%` }}
                     />
                   </div>
                   <div className="flex justify-between text-xs text-[var(--text-secondary)]">
-                    <span>🔥 连续 {activeGoal.streak} 天</span>
-                    <span>近7天 {weekCompleted} 天</span>
-                    <span>剩余 {total - completed} 天</span>
+                    <span className="flex items-center gap-1">
+                      <span className="text-base">🔥</span> {activeGoal.streak} 天连续
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="text-base">📆</span> 近7天 {weekCompleted} 天
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="text-base">⏳</span> 剩余 {total - completed} 天
+                    </span>
                   </div>
                 </div>
               );
             })()}
 
             {/* Recent 7 days */}
-            <div>
-              <h3 className="text-sm text-[var(--text-secondary)] mb-2">最近7天</h3>
-              <div className="grid grid-cols-7 gap-1">
+            <div className="bg-[var(--bg-card)] rounded-2xl p-5 shadow-card">
+              <h3 className="text-sm text-[var(--text-secondary)] mb-3 font-medium">最近7天</h3>
+              <div className="grid grid-cols-7 gap-2">
                 {activeGoal.tasks.slice(0, 7).map((task) => {
                   const isToday = task.date === new Date().toISOString().split("T")[0];
                   return (
                     <div
                       key={task.day}
-                      className={`aspect-square rounded-lg flex flex-col items-center justify-center text-xs ${
+                      className={`aspect-square rounded-xl flex flex-col items-center justify-center text-xs card-enter ${
                         task.completed
-                          ? "bg-[var(--success)] text-[var(--text-primary)]"
+                          ? "bg-gradient-to-br from-[var(--success)] to-[var(--success)]/80 text-white shadow-sm"
                           : isToday
-                          ? "bg-[var(--accent)] text-[var(--text-primary)]"
+                          ? "bg-gradient-to-br from-[var(--accent)] to-[var(--accent-light)] text-white shadow-sm"
                           : "bg-[var(--bg-secondary)]"
                       }`}
                     >
-                      <span className="font-bold">{task.day}</span>
-                      <span>{task.completed ? "✓" : ""}</span>
+                      <span className={`font-bold ${task.completed || isToday ? "" : "text-[var(--text-secondary)]"}`}>{task.day}</span>
+                      <span className={`text-xs ${task.completed || isToday ? "" : "text-[var(--text-tertiary)]"}`}>{task.completed ? "✓" : ""}</span>
                     </div>
                   );
                 })}
@@ -1147,43 +1153,46 @@ export default function Home() {
             </div>
 
             {/* Legend */}
-            <div className="flex gap-4 text-xs text-[var(--text-secondary)]">
-              <span className="flex items-center gap-1">
+            <div className="flex justify-center gap-6 text-xs text-[var(--text-secondary)]">
+              <span className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded bg-[var(--success)]"></span> 已完成
               </span>
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded bg-[var(--accent)]"></span> 今天
               </span>
-              <span className="flex items-center gap-1">
-                <span className="w-3 h-3 rounded bg-[var(--bg-secondary)]"></span> 未完成
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded bg-[var(--bg-secondary)] border border-[var(--border)]"></span> 未完成
               </span>
             </div>
 
             {/* Task List */}
-            <div className="space-y-2">
-              <h3 className="font-semibold">详细任务</h3>
+            <div className="space-y-3">
+              <h3 className="font-semibold text-[var(--text-secondary)] text-sm">详细任务</h3>
               {activeGoal.tasks.map((task) => (
                 <div
                   key={task.day}
-                  className={`bg-[var(--bg-secondary)] rounded-lg p-3 flex items-center gap-3 ${
+                  className={`bg-[var(--bg-card)] rounded-xl p-4 flex items-center gap-4 transition-all card-enter ${
                     task.completed ? "opacity-60" : ""
                   }`}
                 >
                   <span
-                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                    className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${
                       task.completed
-                        ? "bg-[var(--success)] text-[var(--text-primary)]"
-                        : "bg-[var(--bg-primary)]"
+                        ? "bg-gradient-to-br from-[var(--success)] to-[var(--success)]/80 text-white"
+                        : "bg-[var(--bg-secondary)]"
                     }`}
                   >
                     {task.day}
                   </span>
-                  <div className="flex-1">
-                    <p className={`text-sm ${task.completed ? "line-through" : ""}`}>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-medium ${task.completed ? "line-through text-[var(--text-tertiary)]" : ""}`}>
                       {task.task}
                     </p>
-                    <p className="text-xs text-[var(--text-secondary)]">{task.pages}</p>
+                    <p className="text-xs text-[var(--text-secondary)] mt-0.5">{task.pages}</p>
                   </div>
+                  {task.completed && (
+                    <span className="w-6 h-6 rounded-full bg-[var(--success)]/20 flex items-center justify-center text-[var(--success)] text-xs">✓</span>
+                  )}
                 </div>
               ))}
             </div>
