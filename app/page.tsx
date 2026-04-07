@@ -736,11 +736,11 @@ export default function Home() {
 
       {/* Badge Popup */}
       {showBadge && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/50">
-          <div className="bg-[var(--bg-secondary)] rounded-2xl p-8 text-center space-y-4 badge-pop">
-            <div className="text-6xl">{showBadge.emoji}</div>
-            <div>
-              <p className="text-[var(--accent)] font-semibold">新徽章解锁！</p>
+        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/40 backdrop-blur-sm">
+          <div className="bg-[var(--bg-card)] rounded-3xl p-10 text-center space-y-5 shadow-2xl badge-pop max-w-xs mx-auto">
+            <div className="text-7xl badge-unlock">{showBadge.emoji}</div>
+            <div className="space-y-1">
+              <p className="text-[var(--accent)] font-semibold text-sm tracking-wide">🎉 新徽章解锁！</p>
               <p className="text-2xl font-bold">{showBadge.name}</p>
             </div>
           </div>
@@ -1027,34 +1027,34 @@ export default function Home() {
             )}
 
             {/* Badges */}
-            <div className="bg-[var(--bg-secondary)] rounded-xl p-4">
-              <h3 className="font-semibold mb-3">🏅 我的徽章</h3>
-              <div className="flex flex-wrap gap-3">
+            <div className="bg-[var(--bg-card)] rounded-2xl p-5 shadow-card">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <span className="text-lg">🏅</span> 我的徽章
+              </h3>
+              <div className="grid grid-cols-2 gap-3">
                 {activeGoal.badges.map((badge) => (
                   <div
                     key={badge.id}
                     onClick={() => setSelectedBadge(selectedBadge === badge.id ? null : badge.id)}
-                    className={`flex flex-col items-start gap-1 px-3 py-2 rounded-xl cursor-pointer transition-all ${
+                    className={`flex flex-col items-center gap-2 px-4 py-3 rounded-2xl cursor-pointer transition-all card-enter ${
                       badge.unlockedAt
-                        ? "bg-[var(--accent)]/20 border border-[var(--accent)]"
-                        : "bg-[var(--bg-primary)] opacity-60 border border-[var(--border)]"
+                        ? "bg-gradient-to-br from-[var(--accent)]/15 to-[var(--accent)]/5 border border-[var(--accent)]/30"
+                        : "bg-[var(--bg-secondary)] border border-[var(--border)] opacity-50"
                     }`}
                   >
-                    <div className="flex items-center gap-2">
-                      <span>{badge.emoji}</span>
-                      <span className="text-sm font-medium">{badge.name}</span>
-                    </div>
+                    <span className={`text-3xl ${badge.unlockedAt ? "badge-unlock" : "grayscale"}`}>{badge.emoji}</span>
+                    <span className={`text-sm font-medium ${badge.unlockedAt ? "text-[var(--text-primary)]" : "text-[var(--text-secondary)]"}`}>{badge.name}</span>
                     {selectedBadge === badge.id && (
-                      <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                      <p className="text-xs text-[var(--text-secondary)] text-center mt-1">
                         {badge.unlockedAt
                           ? `✅ 已解锁 · 连续打卡 ${badge.daysRequired} 天获得`
-                          : `🔒 连续打卡 ${badge.daysRequired} 天可解锁（当前 ${activeGoal.streak} 天）`}
+                          : `🔒 距解锁还差 ${badge.daysRequired - activeGoal.streak} 天`}
                       </p>
                     )}
                   </div>
                 ))}
               </div>
-              <p className="text-xs text-[var(--text-tertiary)] mt-2">点击徽章查看解锁条件</p>
+              <p className="text-xs text-[var(--text-tertiary)] mt-3 text-center">点击徽章查看详情</p>
             </div>
           </div>
         )}
