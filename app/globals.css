@@ -2,40 +2,79 @@
 
 /* Apple-style: Light, breathable, minimal */
 :root {
-  --bg-primary: #f5f5f7;
-  --bg-secondary: #ffffff;
-  --bg-card: #ffffff;
-  --accent: #ff6b35;
-  --accent-light: #ff8c5a;
-  --accent-subtle: #fff0eb;
-  --text-primary: #1d1d1f;
-  --text-secondary: #86868b;
-  --text-tertiary: #acacb0;
-  --success: #34c759;
-  --danger: #ff3b30;
+  /* 背景色 - 纯白透亮 */
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #F5F5F7;
+  --bg-card: #FFFFFF;
+
+  /* 品牌色 - 逐日橙 */
+  --accent: #FF6B35;
+  --accent-light: #FF8C5A;
+  --accent-subtle: #FFF0EB;
+
+  /* 文字色 - 层次分明 */
+  --text-primary: #1D1D1F;
+  --text-secondary: #86868B;
+  --text-tertiary: #ACACB0;
+
+  /* 状态色 */
+  --success: #34C759;
+  --danger: #FF3B30;
+
+  /* 边框与阴影 - Apple 风格细腻阴影 */
   --border: rgba(0, 0, 0, 0.06);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --border-strong: rgba(0, 0, 0, 0.12);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
   --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.08);
-  --radius-sm: 12px;
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.04);
+
+  /* 圆角 - 更大更现代 */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
   --radius-md: 16px;
   --radius-lg: 20px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* Spring 动画曲线 */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
 }
 
 /* Dark mode - manually toggled via html.dark class in page.tsx */
 .dark {
+  /* 背景色 - 纯黑沉浸 */
   --bg-primary: #000000;
-  --bg-secondary: #1c1c1e;
-  --bg-card: #1c1c1e;
-  --accent: #ff6b35;
+  --bg-secondary: #1C1C1E;
+  --bg-card: #1C1C1E;
+
+  /* 品牌色保持一致 */
+  --accent: #FF6B35;
+  --accent-light: #FF8C5A;
   --accent-subtle: rgba(255, 107, 53, 0.12);
-  --text-primary: #f5f5f7;
-  --text-secondary: #98989d;
+
+  /* 文字色 - 浅色系 */
+  --text-primary: #F5F5F7;
+  --text-secondary: #98989D;
   --text-tertiary: #636366;
+
+  /* 边框与阴影 - 深色模式专用 */
   --border: rgba(255, 255, 255, 0.06);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.5);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.6);
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.3);
+
+  /* 圆角保持一致 */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
 }
 
 body {
