@@ -53,6 +53,28 @@ export default function Home() {
   const [showCloudBanner, setShowCloudBanner] = useState(false);
   const [selectedBadge, setSelectedBadge] = useState<string | null>(null);
 
+  // P1-1: Custom API Key (optional, for power users)
+  const [customApiKey, setCustomApiKey] = useState("");
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
+  const apiKeyInputRef = useRef<HTMLInputElement>(null);
+
+  // Load/save custom API key
+  useEffect(() => {
+    const saved = localStorage.getItem("zhuri_custom_api_key") || "";
+    setCustomApiKey(saved);
+  }, []);
+
+  const saveApiKey = (key: string) => {
+    setCustomApiKey(key);
+    localStorage.setItem("zhuri_custom_api_key", key);
+    setShowApiKeyInput(false);
+  };
+
+  const clearApiKey = () => {
+    setCustomApiKey("");
+    localStorage.removeItem("zhuri_custom_api_key");
+  };
+
   // Goal creation state
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [goalName, setGoalName] = useState("");
@@ -1255,6 +1277,78 @@ export default function Home() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* P1-1: AI Key Configuration */}
+            <div className="bg-[var(--bg-card)] rounded-2xl p-4 border border-[var(--border)]" style={{ boxShadow: 'var(--shadow-sm)' }}>
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <p className="text-sm font-medium">🤖 AI 任务拆解</p>
+                  <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                    {customApiKey ? "✅ 已配置自定义 Key" : "🔥 使用内置免费额度（已包含）"}
+                  </p>
+                </div>
+              </div>
+              {customApiKey ? (
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={() => setShowApiKeyInput(true)}
+                    className="flex-1 py-2 bg-[var(--bg-primary)] text-[var(--text-secondary)] rounded-lg text-sm hover:text-[var(--text-primary)] transition-colors"
+                  >
+                    更换 Key
+                  </button>
+                  <button
+                    onClick={clearApiKey}
+                    className="py-2 px-3 bg-[var(--danger)]/10 text-[var(--danger)] rounded-lg text-sm hover:bg-[var(--danger)]/20 transition-colors"
+                  >
+                    清除
+                  </button>
+                </div>
+              ) : showApiKeyInput ? (
+                <div className="mt-3 space-y-2">
+                  <input
+                    ref={apiKeyInputRef}
+                    type="password"
+                    placeholder="粘贴你的 API Key"
+                    className="w-full bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveApiKey((e.target as HTMLInputElement).value.trim());
+                      if (e.key === "Escape") setShowApiKeyInput(false);
+                    }}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => apiKeyInputRef.current && saveApiKey(apiKeyInputRef.current.value.trim())}
+                      className="flex-1 py-2 bg-[var(--accent)] text-white rounded-lg text-sm font-medium"
+                    >
+                      保存
+                    </button>
+                    <button
+                      onClick={() => setShowApiKeyInput(false)}
+                      className="py-2 px-3 bg-[var(--bg-primary)] text-[var(--text-secondary)] rounded-lg text-sm"
+                    >
+                      取消
+                    </button>
+                  </div>
+                  <p className="text-xs text-[var(--text-tertiary)]">
+                    支持 SiliconFlow / OpenAI 兼容接口 · Key 仅保存在本地
+                  </p>
+                </div>
+              ) : (
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={() => setShowApiKeyInput(true)}
+                    className="flex-1 py-2 bg-[var(--accent)]/10 text-[var(--accent)] rounded-lg text-sm font-medium hover:bg-[var(--accent)]/20 transition-colors"
+                  >
+                    自带 API Key
+                  </button>
+                </div>
+              )}
+              {!customApiKey && (
+                <p className="text-xs text-[var(--text-tertiary)] mt-2">
+                  💡 内置额度稳定可用，自带 Key 可享受更高限额
+                </p>
+              )}
             </div>
 
             {/* P2-7: Notification Reminder */}
