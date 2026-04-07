@@ -1520,8 +1520,8 @@ export default function Home() {
       </main>
 
       {/* Bottom Tab Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-[var(--bg-secondary)]/80 backdrop-blur-xl border-t border-[var(--border)]" style={{ WebkitBackdropFilter: 'blur(20px)' }}>
-        <div className="max-w-lg mx-auto flex">
+      <nav className="fixed bottom-0 left-0 right-0 bg-[var(--bg-primary)]/90 backdrop-blur-xl border-t border-[var(--border)]" style={{ WebkitBackdropFilter: 'blur(20px)' }}>
+        <div className="max-w-lg mx-auto flex relative">
           {[
             { id: "today" as Tab, label: "今日", icon: "📍" },
             { id: "calendar" as Tab, label: "日历", icon: "📅" },
@@ -1531,14 +1531,17 @@ export default function Home() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 py-4 flex flex-col items-center gap-1 transition-colors ${
+              className={`flex-1 py-4 flex flex-col items-center gap-1 relative z-10 transition-all btn-press ${
                 activeTab === tab.id
                   ? "text-[var(--accent)]"
                   : "text-[var(--text-secondary)]"
               }`}
             >
-              <span className="text-xl">{tab.icon}</span>
-              <span className="text-xs">{tab.label}</span>
+              <span className={`text-xl transition-transform ${activeTab === tab.id ? "scale-110" : ""}`}>{tab.icon}</span>
+              <span className={`text-xs font-medium ${activeTab === tab.id ? "font-semibold" : ""}`}>{tab.label}</span>
+              {activeTab === tab.id && (
+                <span className="absolute bottom-2 w-6 h-0.5 bg-[var(--accent)] rounded-full" />
+              )}
             </button>
           ))}
         </div>
