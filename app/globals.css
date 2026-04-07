@@ -157,3 +157,121 @@ body {
 
 .typing-dot:nth-child(2) { animation-delay: 0.15s; }
 .typing-dot:nth-child(3) { animation-delay: 0.3s; }
+
+/* P2-8: Spring emoji pop for check-in success card */
+@keyframes emoji-pop {
+  0% { transform: scale(0) rotate(-15deg); opacity: 0; }
+  60% { transform: scale(1.3) rotate(5deg); }
+  80% { transform: scale(0.95) rotate(-2deg); }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+.emoji-pop {
+  animation: emoji-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* P2-11: Skeleton loading pulse */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.7; }
+}
+
+.skeleton {
+  background: var(--bg-secondary);
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+/* P2-5: Upgraded confetti — varied shapes, burst from center, then fall */
+@keyframes confetti-burst {
+  0% {
+    transform: translate(var(--cx, 50vw), var(--cy, 50vh)) rotate(0deg) scale(0);
+    opacity: 1;
+  }
+  20% {
+    transform: translate(var(--cx, 50vw), var(--cy, 50vh)) rotate(var(--r, 0deg)) scale(1.5);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(var(--cx, 50vw) + var(--dx, 0px)), calc(var(--cy, 50vh) + var(--dy, 100vh))) rotate(var(--r, 0deg)) scale(0.8);
+    opacity: 0;
+  }
+}
+
+.confetti-burst {
+  animation: confetti-burst 1.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+/* P2-5: Confetti pieces with varied styles */
+.confetti-piece.circle {
+  border-radius: 50%;
+}
+
+.confetti-piece.strip {
+  width: 6px !important;
+  height: 20px !important;
+  border-radius: 3px !important;
+}
+
+/* P2-2: Tab indicator sliding background */
+.tab-indicator {
+  position: absolute;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px 2px 0 0;
+  transition: left 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), width 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* P2-5: Onboarding completion explosion */
+@keyframes onboarding-explosion {
+  0% {
+    transform: scale(0);
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: scale(3);
+    opacity: 0;
+  }
+}
+
+.onboarding-explosion {
+  animation: onboarding-explosion 0.8s ease-out forwards;
+  pointer-events: none;
+}
+
+/* P2-4: Confetti burst pieces - burst from center then fall */
+@keyframes confetti-burst {
+  0% {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  10% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx, 50px), var(--dy, 150px)) rotate(var(--r, 360deg)) scale(0.5);
+    opacity: 0;
+  }
+}
+
+.confetti-burst-piece {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  animation: confetti-burst 1.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+/* P2-7: Input focus ring */
+.focus-ring:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-subtle), 0 0 0 5px var(--accent);
+}
+
+/* P2-8: Scale press feedback for buttons */
+.btn-press:active {
+  transform: scale(0.95);
+}

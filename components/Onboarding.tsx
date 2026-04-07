@@ -6,8 +6,53 @@ interface OnboardingProps {
   onComplete: () => void;
 }
 
+const CONFETTI_COLORS = ["#ff6b35", "#22c55e", "#fbbf24", "#ef4444", "#8b5cf6", "#f97316", "#06b6d4"];
+
+function ConfettiBurst({ onDone }: { onDone: () => void }) {
+  const pieces = Array.from({ length: 60 }, (_, i) => {
+    const angle = (i / 60) * 360;
+    const distance = 100 + Math.random() * 200;
+    const color = CONFETTI_COLORS[i % CONFETTI_COLORS.length];
+    const size = 6 + Math.random() * 10;
+    const isCircle = i % 3 === 0;
+    const isStrip = i % 3 === 1;
+    const shapeClass = isCircle ? "circle" : isStrip ? "strip" : "";
+    const dx = Math.cos((angle * Math.PI) / 180) * distance;
+    const dy = Math.sin((angle * Math.PI) / 180) * distance * 0.6 + 150;
+
+    return (
+      <div
+        key={i}
+        className={`confetti-burst-piece ${shapeClass}`}
+        style={{
+          width: size,
+          height: isStrip ? size * 2.5 : size,
+          backgroundColor: color,
+          animationDelay: `${Math.random() * 0.2}s`,
+          ["--dx" as string]: `${dx}px`,
+          ["--dy" as string]: `${dy}px`,
+          ["--r" as string]: `${Math.random() * 720 - 360}deg`,
+        }}
+      />
+    );
+  });
+
+  // P2-4: After confetti plays, call onDone
+  setTimeout(onDone, 1800);
+
+  return (
+    <div
+      className="fixed inset-0 pointer-events-none z-[100]"
+      style={{ overflow: "hidden" }}
+    >
+      {pieces}
+    </div>
+  );
+}
+
 export default function Onboarding({ onComplete }: OnboardingProps) {
   const [step, setStep] = useState(0);
+  const [showConfetti, setShowConfetti] = useState(false);
 
   const slides = [
     {
@@ -30,8 +75,15 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     },
   ];
 
+  const handleFinish = () => {
+    setShowConfetti(true);
+  };
+
   return (
     <div className="fixed inset-0 bg-[var(--bg-primary)] flex flex-col z-50">
+      {/* P2-4: Confetti burst on completion */}
+      {showConfetti && <ConfettiBurst onDone={onComplete} />}
+
       {/* Skip button - top right, always visible */}
       {step < slides.length - 1 && (
         <div className="absolute top-8 right-6 z-10">
@@ -46,7 +98,9 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 
       <div className="flex-1 flex flex-col items-center justify-center p-8">
         <div className="text-center max-w-xs">
-          <div className="text-7xl mb-10 animate-bounce">{slides[step].icon}</div>
+          <div className="text-7xl mb-10" style={{ animation: "emoji-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards" }}>
+            {slides[step].icon}
+          </div>
           <h1 className="text-2xl font-semibold text-[var(--text-primary)] mb-3 tracking-tight">{slides[step].title}</h1>
           <p className="text-base mb-4" style={{ color: "var(--accent)" }}>
             {slides[step].subtitle}
@@ -74,10 +128,10 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
           ))}
         </div>
 
-        {/* Action button - Apple style, full width, no heavy shadow */}
+        {/* Action button - P2-4: Confetti on finish */}
         <button
-          onClick={() => (step < slides.length - 1 ? setStep(step + 1) : onComplete())}
-          className="w-full py-3.5 bg-[var(--accent)] text-white font-medium rounded-xl hover:bg-[var(--accent-light)] transition-all text-base"
+          onClick={() => (step < slides.length - 1 ? setStep(step + 1) : handleFinish())}
+          className="w-full py-3.5 bg-[var(--accent)] text-white font-medium rounded-xl hover:bg-[var(--accent-light)] transition-all text-base active:scale-95"
           style={{ letterSpacing: '0.01em' }}
         >
           {step < slides.length - 1 ? "下一步" : "开始逐日"}

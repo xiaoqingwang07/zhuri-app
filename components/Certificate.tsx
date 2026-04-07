@@ -250,27 +250,27 @@ export default function Certificate({ goal, onClose }: CertificateProps) {
 
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/90 p-4">
-      <div className="bg-[#1a1a1a] rounded-3xl overflow-hidden max-w-sm w-full">
+      <div className="bg-[var(--bg-secondary)] rounded-3xl overflow-hidden max-w-sm w-full">
         {/* Certificate Preview */}
         <div
           ref={previewRef}
           className="relative p-8 text-center transition-all duration-300"
           style={{
-            background: `linear-gradient(180deg, #0f0f0f 0%, #1a1a1a 50%, #0f0f0f 100%), ${getUniquePattern()}`,
+            background: `linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, var(--bg-primary) 100%), ${getUniquePattern()}`,
             backgroundBlendMode: "normal",
             aspectRatio: orientationApplied === "portrait" ? "9/16" : "16/9",
           }}
         >
           <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
             <div className="text-4xl mb-3">{goalType.icon}</div>
-            <div className="text-white text-xl font-bold mb-1">成就证书</div>
+            <div className="text-[var(--text-primary)] text-xl font-bold mb-1">成就证书</div>
             <div className="text-sm mb-4" style={{ color: goalType.color }}>
               {goalType.label}
             </div>
-            <div className="text-white text-sm font-medium mb-3 leading-relaxed px-2 text-center">
+            <div className="text-[var(--text-primary)] text-sm font-medium mb-3 leading-relaxed px-2 text-center">
               {goal.name}
             </div>
-            <div className="flex justify-center gap-4 text-xs text-gray-400 mb-4">
+            <div className="flex justify-center gap-4 text-xs text-[var(--text-secondary)] mb-4">
               <span>完成 {goal.totalDays} 天</span>
               <span>🔥 {goal.longestStreak} 天连续</span>
             </div>
@@ -281,14 +281,14 @@ export default function Certificate({ goal, onClose }: CertificateProps) {
                 </span>
               ))}
             </div>
-            <div className="text-gray-500 text-xs">
+            <div className="text-[var(--text-tertiary)] text-xs">
               {new Date().toLocaleDateString("zh-CN", {
                 year: "numeric",
                 month: "long",
                 day: "numeric",
               })}
             </div>
-            <div className="mt-4 text-gray-600 text-xs italic">"坚持，是最好的天赋"</div>
+            <div className="mt-4 text-[var(--text-tertiary)] text-xs italic">"坚持，是最好的天赋"</div>
             <div className="mt-3" style={{ color: goalType.color }}>
               <span className="font-bold">逐日</span>
             </div>
@@ -296,15 +296,15 @@ export default function Certificate({ goal, onClose }: CertificateProps) {
         </div>
 
         {/* P2-9: Orientation Toggle */}
-        <div className="p-4 bg-[#1a1a1a] border-t border-gray-800">
-          <p className="text-xs text-gray-500 text-center mb-2">选择证书比例</p>
+        <div className="p-4 bg-[var(--bg-secondary)] border-t border-[var(--border)]">
+          <p className="text-xs text-[var(--text-tertiary)] text-center mb-2">选择证书比例</p>
           <div className="flex gap-2">
             <button
               onClick={() => setOrientation("portrait")}
               className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
                 orientation === "portrait"
                   ? "bg-[var(--accent)] text-white"
-                  : "bg-[#2a2a2a] text-gray-400 hover:text-white"
+                  : "bg-[var(--bg-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               }`}
             >
               📱 竖版(朋友圈)
@@ -314,7 +314,7 @@ export default function Certificate({ goal, onClose }: CertificateProps) {
               className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
                 orientation === "landscape"
                   ? "bg-[var(--accent)] text-white"
-                  : "bg-[#2a2a2a] text-gray-400 hover:text-white"
+                  : "bg-[var(--bg-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               }`}
             >
               🌐 横版(小红书)
@@ -323,9 +323,9 @@ export default function Certificate({ goal, onClose }: CertificateProps) {
         </div>
 
         {/* Actions */}
-        <div className="p-4 space-y-3 bg-[#0f0f0f]">
+        <div className="p-4 space-y-3 bg-[var(--bg-primary)]">
           {showTip ? (
-            <div className="text-center text-sm text-gray-400 mb-2">
+            <div className="text-center text-sm text-[var(--text-secondary)] mb-2">
               <p>长按证书保存到相册</p>
               <p>然后手动分享到微信</p>
             </div>
@@ -382,7 +382,7 @@ export default function Certificate({ goal, onClose }: CertificateProps) {
 
           <button
             onClick={onClose}
-            className="w-full py-3 text-gray-500 hover:text-white transition-colors"
+            className="w-full py-3 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
           >
             关闭
           </button>

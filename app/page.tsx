@@ -31,6 +31,9 @@ export default function Home() {
   const [justCheckedIn, setJustCheckedIn] = useState(false);
   // P0-2: Track which task was just checked in for button animation
   const [justCheckedInDay, setJustCheckedInDay] = useState<number | null>(null);
+  // P2-2: Tab bar sliding indicator
+  const [tabIndicator, setTabIndicator] = useState({ left: 0, width: 0 });
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [showInvite, setShowInvite] = useState(false);
   const [isOnboarding, setIsOnboarding] = useState(false);
 
@@ -132,6 +135,24 @@ export default function Home() {
     }
     localStorage.setItem('zhuri_theme', theme);
   }, [theme]);
+
+  // P2-2: Update tab indicator position on tab change
+  useEffect(() => {
+    const tabs = ["today", "calendar", "supervision", "settings"] as Tab[];
+    const idx = tabs.indexOf(activeTab);
+    const el = tabRefs.current[idx];
+    if (el) {
+      const parent = el.parentElement;
+      if (parent) {
+        const parentRect = parent.getBoundingClientRect();
+        const elRect = el.getBoundingClientRect();
+        setTabIndicator({
+          left: elRect.left - parentRect.left,
+          width: elRect.width,
+        });
+      }
+    }
+  }, [activeTab]);
 
   // P2-7: Load notification state and check on mount
   useEffect(() => {
@@ -591,7 +612,7 @@ export default function Home() {
                   type="text"
                   value={goalName}
                   onChange={(e) => setGoalName(e.target.value)}
-                  className="w-full bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+                  className="w-full bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-2 focus:ring-offset-[var(--bg-secondary)]"
                   placeholder={
                     selectedTemplate !== null
                       ? templates[selectedTemplate].name.includes("读书")
@@ -619,7 +640,7 @@ export default function Home() {
                     if (!isNaN(val)) { setTotalDays(Math.min(365, Math.max(3, val))); }
                   }}
                   placeholder="输入天数"
-                  className="w-full bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+                  className="w-full bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg px-4 py-3 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-2 focus:ring-offset-[var(--bg-secondary)]"
                 />
               </div>
 
@@ -700,32 +721,44 @@ export default function Home() {
       {/* Check-in Success Feedback with Celebration */}
       {justCheckedIn && (
         <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
-          {/* Confetti-like background - P1 enhanced */}
+          {/* Confetti - P2-5: Varied shapes, sizes, colors */}
           <div className="absolute inset-0 overflow-hidden">
-            {[...Array(30)].map((_, i) => (
-              <div
-                key={i}
-                className="absolute confetti-piece"
-                style={{
-                  left: `${Math.random() * 100}%`,
-                  animationDelay: `${Math.random() * 0.5}s`,
-                  backgroundColor: ["#ff6b35", "#22c55e", "#fbbf24", "#ef4444", "#8b5cf6", "#f97316", "#06b6d4"][Math.floor(Math.random() * 7)],
-                }}
-              />
-            ))}
+            {["circle", "strip", "square"].flatMap((shape, si) =>
+              Array.from({ length: 17 }, (_, i) => {
+                const colors = ["#ff6b35", "#22c55e", "#fbbf24", "#ef4444", "#8b5cf6", "#f97316", "#06b6d4", "#fbbf24"];
+                const sizes = [8, 10, 12, 14];
+                const color = colors[(si * 17 + i) % colors.length];
+                const size = sizes[(si * 17 + i) % sizes.length];
+                const shapeClass = shape === "circle" ? "circle" : shape === "strip" ? "strip" : "";
+                return (
+                  <div
+                    key={`${shape}-${i}`}
+                    className={`absolute confetti-piece ${shapeClass}`}
+                    style={{
+                      left: `${Math.random() * 100}%`,
+                      top: `${Math.random() * 30 - 10}%`,
+                      width: size,
+                      height: shape === "strip" ? size * 2.5 : size,
+                      animationDelay: `${Math.random() * 0.6}s`,
+                      backgroundColor: color,
+                    }}
+                  />
+                );
+              })
+            )}
           </div>
-          {/* Success card - human voice */}
-          <div className="relative bg-gradient-to-br from-[var(--success)] to-green-600 px-8 py-6 rounded-2xl shadow-2xl checkin-success">
-            <div className="text-6xl mb-2 animate-bounce">🎉</div>
-            <p className="text-2xl font-bold text-white">
+          {/* Success card - P2-8: Spring emoji-pop, P2-9: CSS vars */}
+          <div className="relative bg-gradient-to-br from-[var(--success)] to-emerald-600 px-8 py-6 rounded-2xl shadow-2xl checkin-success">
+            <div className="text-6xl mb-2 emoji-pop">🎉</div>
+            <p className="text-2xl font-bold text-[var(--text-primary)]">
               {activeGoal && activeGoal.streak === 1 ? "完成啦！" : "又搞定一天！"}
             </p>
-            <p className="text-white/90 mt-1">🔥 连续 {activeGoal?.streak || 0} 天</p>
+            <p className="text-[var(--text-primary)]/80 mt-1 opacity-90">🔥 连续 {activeGoal?.streak || 0} 天</p>
             {activeGoal && activeGoal.streak >= 7 && (
               <p className="text-yellow-200 text-sm mt-2">💪 {activeGoal.streak}天了，你不是在坚持，是在享受</p>
             )}
             {activeGoal && activeGoal.streak === 1 && (
-              <p className="text-white/80 text-sm mt-2">好的开始！明天继续 👊</p>
+              <p className="text-[var(--text-primary)]/80 text-sm mt-2 opacity-80">好的开始！明天继续 👊</p>
             )}
             {activeGoal && activeGoal.streak === 30 && (
               <p className="text-yellow-200 text-sm mt-2">🏆 30天！说真的，我很为你骄傲</p>
@@ -854,6 +887,25 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="flex-1 max-w-lg mx-auto w-full p-4 pb-24">
+        {/* P2-11: Skeleton loading when recovering from cloud */}
+        {isLoading ? (
+          <div className="space-y-4 pt-4">
+            <div className="skeleton h-6 w-48 mx-auto" />
+            <div className="skeleton h-4 w-64 mx-auto" />
+            <div className="space-y-3 mt-6">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="bg-[var(--bg-secondary)] rounded-xl p-4 flex items-start gap-3">
+                  <div className="skeleton w-8 h-8 rounded-full flex-shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="skeleton h-3 w-20" />
+                    <div className="skeleton h-4 w-full" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <>
         {/* Today Tab */}
         {activeTab === "today" && activeGoal && (
           <div className="space-y-6 slide-up">
@@ -962,19 +1014,25 @@ export default function Home() {
                               handleCheckIn(taskIndex);
                             }}
                             disabled={task.completed}
-                            className={`w-8 h-8 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${
+                            className={`w-8 h-8 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all btn-press ${
                               task.completed
                                 ? "bg-[var(--success)] border-[var(--success)] text-[var(--text-primary)]"
                                 : justCheckedInDay === taskIndex
                                 ? "border-[var(--success)] bg-[var(--success)]/20 scale-110"
-                                : "border-[var(--accent)] hover:bg-[var(--accent)]/20"
+                                : "border-[var(--accent)] hover:bg-[var(--accent)]/20 active:scale-90"
                             }`}
                           >
                             {task.completed ? "✓" : ""}
                           </button>
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
-                              <span className="text-xs px-2 py-0.5 bg-[var(--bg-primary)] rounded text-[var(--text-secondary)]">
+                              <span className={`text-xs px-2 py-0.5 rounded font-medium ${
+                                task.type === "reading" ? "bg-blue-500/10 text-blue-500" :
+                                task.type === "notes" ? "bg-yellow-500/10 text-yellow-600" :
+                                task.type === "review" ? "bg-purple-500/10 text-purple-500" :
+                                task.type === "summary" ? "bg-green-500/10 text-green-500" :
+                                "bg-[var(--bg-primary)] text-[var(--text-secondary)]"
+                              }`}>
                                 {task.type === "reading" && "📖 阅读"}
                                 {task.type === "notes" && "📝 笔记"}
                                 {task.type === "review" && "🔍 回顾"}
@@ -1175,13 +1233,28 @@ export default function Home() {
             </div>
 
             {socialMembers.length === 0 ? (
-              <div className="bg-[var(--bg-secondary)] rounded-2xl p-8 text-center space-y-4">
-                <div className="text-5xl">🤝</div>
-                <div>
-                  <p className="font-semibold text-[var(--text-primary)]">还没有队友</p>
-                  <p className="text-sm text-[var(--text-secondary)] mt-1">
-                    邀请一个朋友一起打卡，互相督促，坚持到底的概率会高 3 倍
+              <div className="bg-[var(--bg-secondary)] rounded-2xl p-8 text-center space-y-5">
+                {/* P2-10: Redesigned empty state with preview */}
+                <div className="text-6xl mb-2">👥</div>
+                <div className="space-y-2">
+                  <p className="font-bold text-lg text-[var(--text-primary)]">你的监督团，等人加入</p>
+                  <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+                    朋友加入后，你可以看到彼此的打卡状态<br />
+                    如果ta今天忘打卡，<span className="text-[var(--accent)]">戳一下TA</span>提醒一下
                   </p>
+                </div>
+                {/* Feature preview cards */}
+                <div className="grid grid-cols-2 gap-3 text-left">
+                  <div className="bg-[var(--bg-primary)] rounded-xl p-3">
+                    <div className="text-xl mb-1">👀</div>
+                    <p className="text-xs font-medium text-[var(--text-primary)]">看到彼此进度</p>
+                    <p className="text-xs text-[var(--text-tertiary)]">谁今天打卡了，一目了然</p>
+                  </div>
+                  <div className="bg-[var(--bg-primary)] rounded-xl p-3">
+                    <div className="text-xl mb-1">👆</div>
+                    <p className="text-xs font-medium text-[var(--text-primary)]">戳一下TA</p>
+                    <p className="text-xs text-[var(--text-tertiary)]">朋友忘了？轻轻提醒</p>
+                  </div>
                 </div>
                 <button
                   onClick={async () => {
@@ -1191,11 +1264,11 @@ export default function Home() {
                       alert("邀请链接已复制，发送给朋友吧！");
                     }
                   }}
-                  className="px-6 py-3 bg-[var(--accent)] text-white font-medium rounded-xl hover:bg-[var(--accent-light)] transition-colors"
+                  className="w-full py-3 bg-[var(--accent)] text-white font-semibold rounded-xl hover:bg-[var(--accent-light)] transition-colors active:scale-95"
                 >
-                  邀请好友加入 →
+                  邀请好友加入
                 </button>
-                <p className="text-xs text-[var(--text-tertiary)]">发送链接，朋友加入后就能互相看到进度</p>
+                <p className="text-xs text-[var(--text-tertiary)]">复制链接发送微信，朋友点击即可加入</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -1310,7 +1383,7 @@ export default function Home() {
                     ref={apiKeyInputRef}
                     type="password"
                     placeholder="粘贴你的 API Key"
-                    className="w-full bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+                    className="w-full bg-[var(--bg-primary)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-2 focus:ring-offset-[var(--bg-secondary)]"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") saveApiKey((e.target as HTMLInputElement).value.trim());
                       if (e.key === "Escape") setShowApiKeyInput(false);
@@ -1493,19 +1566,30 @@ export default function Home() {
             </button>
           </div>
         )}
+          )}
+        </>
       </main>
 
-      {/* Bottom Tab Bar */}
+      {/* Bottom Tab Bar - P2-2: Sliding indicator */}
       <nav className="fixed bottom-0 left-0 right-0 bg-[var(--bg-secondary)]/80 backdrop-blur-xl border-t border-[var(--border)]" style={{ WebkitBackdropFilter: 'blur(20px)' }}>
-        <div className="max-w-lg mx-auto flex">
+        <div className="max-w-lg mx-auto flex relative">
+          {/* Sliding indicator */}
+          <div
+            className="tab-indicator"
+            style={{
+              left: tabIndicator.left,
+              width: tabIndicator.width,
+            }}
+          />
           {[
             { id: "today" as Tab, label: "今日", icon: "📍" },
             { id: "calendar" as Tab, label: "日历", icon: "📅" },
             { id: "supervision" as Tab, label: "监督", icon: "👥" },
             { id: "settings" as Tab, label: "设置", icon: "⚙️" },
-          ].map((tab) => (
+          ].map((tab, idx) => (
             <button
               key={tab.id}
+              ref={(el) => { tabRefs.current[idx] = el; }}
               onClick={() => setActiveTab(tab.id)}
               className={`flex-1 py-4 flex flex-col items-center gap-1 transition-colors ${
                 activeTab === tab.id
