@@ -128,3 +128,32 @@ body {
   border-radius: 2px;
   animation: confetti-fall 2s ease-out forwards;
 }
+
+/* P0-2: Check-in button ripple effect */
+@keyframes ripple {
+  0% {
+    transform: scale(0);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(2.5);
+    opacity: 0;
+  }
+}
+
+.checkin-ripple {
+  animation: ripple 0.6s ease-out;
+}
+
+/* P0-1: Typing indicator dots */
+@keyframes typing-dot {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-4px); }
+}
+
+.typing-dot {
+  animation: typing-dot 1.2s ease-in-out infinite;
+}
+
+.typing-dot:nth-child(2) { animation-delay: 0.15s; }
+.typing-dot:nth-child(3) { animation-delay: 0.3s; }

@@ -29,6 +29,8 @@ export default function Home() {
   const [showBadge, setShowBadge] = useState<Badge | null>(null);
   const [showCompletionCard, setShowCompletionCard] = useState(false);
   const [justCheckedIn, setJustCheckedIn] = useState(false);
+  // P0-2: Track which task was just checked in for button animation
+  const [justCheckedInDay, setJustCheckedInDay] = useState<number | null>(null);
   const [showInvite, setShowInvite] = useState(false);
   const [isOnboarding, setIsOnboarding] = useState(false);
 
@@ -341,7 +343,9 @@ export default function Home() {
 
     // Show check-in feedback
     setJustCheckedIn(true);
+    setJustCheckedInDay(dayIndex);
     setTimeout(() => setJustCheckedIn(false), 2000);
+    setTimeout(() => setJustCheckedInDay(null), 600);
 
     // Mark check-in hint as shown
     localStorage.setItem("zhuri_checkin_hint_shown", "1");
@@ -408,6 +412,15 @@ export default function Home() {
                   <span className={loadingCountdown <= 15 ? "text-[var(--accent)] font-medium" : ""}>② 生成任务</span>
                   <span className="text-[var(--text-secondary)]">→</span>
                   <span className={loadingCountdown <= 5 ? "text-[var(--accent)] font-medium" : ""}>③ 完成</span>
+                </div>
+                {/* P0-1: Typing indicator showing AI is working */}
+                <div className="flex justify-center items-center gap-1 pt-1">
+                  <span className="text-xs text-[var(--text-tertiary)]">AI正在思考</span>
+                  <span className="flex gap-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] typing-dot" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] typing-dot" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] typing-dot" />
+                  </span>
                 </div>
               </div>
             </div>
@@ -920,12 +933,18 @@ export default function Home() {
                         }`}
                       >
                         <div className="flex items-start gap-3">
+                          {/* P0-2: Check-in button with pulse animation */}
                           <button
-                            onClick={() => !task.completed && handleCheckIn(taskIndex)}
+                            onClick={() => {
+                              if (task.completed) return;
+                              handleCheckIn(taskIndex);
+                            }}
                             disabled={task.completed}
                             className={`w-8 h-8 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${
                               task.completed
                                 ? "bg-[var(--success)] border-[var(--success)] text-[var(--text-primary)]"
+                                : justCheckedInDay === taskIndex
+                                ? "border-[var(--success)] bg-[var(--success)]/20 scale-110"
                                 : "border-[var(--accent)] hover:bg-[var(--accent)]/20"
                             }`}
                           >

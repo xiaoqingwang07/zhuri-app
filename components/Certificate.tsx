@@ -15,6 +15,9 @@ export default function Certificate({ goal, onClose }: CertificateProps) {
   const [showTip, setShowTip] = useState(false);
   const [orientation, setOrientation] = useState<Orientation>("portrait");
   const [orientationApplied, setOrientationApplied] = useState<Orientation>("portrait");
+  // P0-3: Loading state for save/share operations
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -180,6 +183,8 @@ export default function Certificate({ goal, onClose }: CertificateProps) {
   };
 
   const handleSave = async () => {
+    // P0-3: Show loading state
+    setIsSaving(true);
     try {
       const { width, height } = getCanvasDimensions(orientation);
       const canvas = document.createElement("canvas");
@@ -196,10 +201,14 @@ export default function Certificate({ goal, onClose }: CertificateProps) {
     } catch (error) {
       console.error("Save failed:", error);
       setShowTip(true);
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleShare = async () => {
+    // P0-3: Show loading state
+    setIsSharing(true);
     const { width, height } = getCanvasDimensions(orientation);
     const canvas = document.createElement("canvas");
     canvas.width = width;
@@ -222,9 +231,12 @@ export default function Certificate({ goal, onClose }: CertificateProps) {
       } catch (error) {
         console.error("Share failed:", error);
         setShowTip(true);
+      } finally {
+        setIsSharing(false);
       }
     } else {
       setShowTip(true);
+      setIsSharing(false);
     }
   };
 
@@ -319,26 +331,52 @@ export default function Certificate({ goal, onClose }: CertificateProps) {
             </div>
           ) : null}
 
+          {/* P0-3: Save button with loading state */}
           <button
             onClick={handleSave}
-            className="w-full py-3 bg-white text-black font-semibold rounded-xl hover:bg-gray-100 transition-colors"
+            disabled={isSaving}
+            className="w-full py-3 bg-white text-black font-semibold rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            保存到相册
+            {isSaving ? (
+              <>
+                <span className="animate-spin">⏳</span>
+                生成中...
+              </>
+            ) : (
+              "保存到相册"
+            )}
           </button>
 
+          {/* P0-3: Share button with loading state */}
           {canShare ? (
             <button
               onClick={handleShare}
-              className="w-full py-3 bg-[var(--accent)] text-white font-semibold rounded-xl hover:bg-[var(--accent-light)] transition-colors"
+              disabled={isSharing}
+              className="w-full py-3 bg-[var(--accent)] text-white font-semibold rounded-xl hover:bg-[var(--accent-light)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              分享到微信
+              {isSharing ? (
+                <>
+                  <span className="animate-spin">⏳</span>
+                  生成中...
+                </>
+              ) : (
+                "分享到微信"
+              )}
             </button>
           ) : (
             <button
               onClick={handleShare}
-              className="w-full py-3 bg-[var(--accent)] text-white font-semibold rounded-xl hover:bg-[var(--accent-light)] transition-colors"
+              disabled={isSharing}
+              className="w-full py-3 bg-[var(--accent)] text-white font-semibold rounded-xl hover:bg-[var(--accent-light)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              分享证书
+              {isSharing ? (
+                <>
+                  <span className="animate-spin">⏳</span>
+                  生成中...
+                </>
+              ) : (
+                "分享证书"
+              )}
             </button>
           )}
 
