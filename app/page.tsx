@@ -1202,17 +1202,17 @@ export default function Home() {
         {/* Supervision Tab */}
         {activeTab === "supervision" && (
           <div className="space-y-4 slide-up">
-            <div className="text-center py-4">
+            <div className="text-center py-5">
               <h2 className="text-xl font-bold">监督团</h2>
-              <p className="text-sm text-[var(--text-secondary)]">一个人走得快，一群人走得远</p>
+              <p className="text-sm text-[var(--text-secondary)] mt-1">一个人走得快，一群人走得远</p>
             </div>
 
             {socialMembers.length === 0 ? (
-              <div className="bg-[var(--bg-secondary)] rounded-2xl p-8 text-center space-y-4">
-                <div className="text-5xl">🤝</div>
+              <div className="bg-[var(--bg-card)] rounded-3xl p-8 text-center space-y-5 shadow-card">
+                <div className="text-6xl">🤝</div>
                 <div>
-                  <p className="font-semibold text-[var(--text-primary)]">还没有队友</p>
-                  <p className="text-sm text-[var(--text-secondary)] mt-1">
+                  <p className="font-semibold text-[var(--text-primary)] text-lg">还没有队友</p>
+                  <p className="text-sm text-[var(--text-secondary)] mt-2 leading-relaxed">
                     邀请一个朋友一起打卡，互相督促，坚持到底的概率会高 3 倍
                   </p>
                 </div>
@@ -1224,7 +1224,7 @@ export default function Home() {
                       alert("邀请链接已复制，发送给朋友吧！");
                     }
                   }}
-                  className="px-6 py-3 bg-[var(--accent)] text-white font-medium rounded-xl hover:bg-[var(--accent-light)] transition-colors"
+                  className="px-8 py-3.5 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-light)] text-white font-semibold rounded-2xl shadow-md hover:shadow-lg transition-all btn-press"
                 >
                   邀请好友加入 →
                 </button>
@@ -1236,36 +1236,36 @@ export default function Home() {
                   const today = new Date().toISOString().split("T")[0];
                   const todayCompleted = member.lastCheckIn === today;
                   return (
-                    <div key={member.userId} className="bg-[var(--bg-secondary)] rounded-xl p-4">
-                      <div className="flex items-center gap-3">
-                        <span className="text-3xl">{member.userId === socialUserId ? "🙋" : "👤"}</span>
+                    <div key={member.userId} className="bg-[var(--bg-card)] rounded-2xl p-4 shadow-card card-enter">
+                      <div className="flex items-center gap-4">
+                        <span className="text-4xl flex-shrink-0">{member.userId === socialUserId ? "🙋" : "👤"}</span>
                         <div className="flex-1">
                           <p className="font-semibold">
                             {member.userName}
-                            {member.userId === socialUserId && <span className="ml-1 text-xs text-[var(--accent)]">（本人）</span>}
+                            {member.userId === socialUserId && <span className="ml-1.5 text-xs px-2 py-0.5 bg-[var(--accent)]/10 text-[var(--accent)] rounded-full">本人</span>}
                           </p>
-                          <p className="text-xs text-[var(--text-secondary)]">
-                            🔥 连续 {member.streak} 天 · {todayCompleted ? "今日已完成" : "等待打卡"}
+                          <p className="text-xs text-[var(--text-secondary)] mt-0.5 flex items-center gap-1">
+                            <span>🔥</span> 连续 {member.streak} 天 · {todayCompleted ? "今日已完成" : "等待打卡"}
                           </p>
                         </div>
                         {!todayCompleted && member.userId !== socialUserId && (
                           <button
                             onClick={() => poke(member.userId, member.userName)}
-                            className="px-4 py-2 bg-[var(--accent)] text-[var(--text-primary)] rounded-lg text-sm font-medium hover:bg-[var(--accent-light)] transition-colors"
+                            className="px-4 py-2 bg-[var(--accent)] text-white rounded-xl text-sm font-medium hover:bg-[var(--accent-light)] transition-colors btn-press"
                           >
                             戳一下TA
                           </button>
                         )}
                         {todayCompleted && (
-                          <span className="text-2xl">✅</span>
+                          <span className="w-8 h-8 rounded-full bg-[var(--success)]/20 flex items-center justify-center text-[var(--success)] text-sm font-bold">✓</span>
                         )}
                       </div>
                     </div>
                   );
                 })}
                 {/* Group stats */}
-                <div className="bg-[var(--bg-primary)] rounded-xl p-3 border border-[var(--border)]">
-                  <p className="text-xs text-[var(--text-secondary)]">
+                <div className="bg-[var(--bg-secondary)] rounded-xl p-4 text-center">
+                  <p className="text-sm text-[var(--text-secondary)]">
                     共 {socialMembers.length} 人参与 · 已连续打卡{" "}
                     {Math.max(...socialMembers.map((m) => m.streak), 0)} 天最高
                   </p>
@@ -1278,7 +1278,7 @@ export default function Home() {
                       alert("邀请链接已复制，发送给朋友吧！");
                     }
                   }}
-                  className="w-full py-3 bg-[var(--accent)]/10 text-[var(--accent)] rounded-xl text-sm font-medium hover:bg-[var(--accent)]/20 transition-colors"
+                  className="w-full py-3.5 bg-[var(--accent)]/10 text-[var(--accent)] rounded-2xl text-sm font-semibold hover:bg-[var(--accent)]/20 transition-colors btn-press"
                 >
                   ＋ 继续邀请朋友
                 </button>
