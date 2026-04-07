@@ -43,28 +43,28 @@ export default function InviteModal({ onClose }: InviteModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/80" onClick={onClose}>
+    <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="bg-[var(--bg-secondary)] rounded-2xl p-6 max-w-sm w-full mx-4"
+        className="bg-[var(--bg-card)] rounded-3xl p-6 max-w-sm w-full mx-4 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="text-center mb-6">
-          <div className="text-5xl mb-4">👥</div>
-          <h2 className="text-xl font-bold text-white">邀请朋友加入</h2>
+          <div className="text-6xl mb-4">👥</div>
+          <h2 className="text-xl font-bold text-[var(--text-primary)]">邀请朋友加入</h2>
           <p className="text-sm text-[var(--text-secondary)] mt-2">
             分享链接，朋友一起监督打卡
           </p>
         </div>
 
         <div className="space-y-4">
-          <div className="bg-[var(--bg-primary)] rounded-xl p-4 break-all">
-            <p className="text-xs text-[var(--text-secondary)] mb-1">邀请链接</p>
-            <p className="text-sm text-white/80 select-all">{inviteLink}</p>
+          <div className="bg-[var(--bg-secondary)] rounded-2xl p-4 break-all">
+            <p className="text-xs text-[var(--text-tertiary)] mb-1.5 font-medium">邀请链接</p>
+            <p className="text-sm text-[var(--text-primary)] select-all">{inviteLink}</p>
           </div>
 
           <button
             onClick={handleCopy}
-            className={`w-full py-3 font-semibold rounded-xl transition-colors ${
+            className={`w-full py-3.5 font-semibold rounded-2xl transition-all btn-press ${
               copied
                 ? "bg-[var(--success)] text-white"
                 : "bg-[var(--accent)] text-white hover:bg-[var(--accent-light)]"
@@ -80,7 +80,7 @@ export default function InviteModal({ onClose }: InviteModalProps) {
 
         <button
           onClick={onClose}
-          className="w-full mt-4 py-2 text-[var(--text-secondary)] hover:text-white transition-colors"
+          className="w-full mt-4 py-2.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
         >
           关闭
         </button>

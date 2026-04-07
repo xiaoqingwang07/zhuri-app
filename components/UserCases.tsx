@@ -47,18 +47,19 @@ export default function UserCases() {
   // 用户有目标时 → 显示自己的真实数据
   if (stats.goals > 0) {
     return (
-      <div className="bg-[var(--bg-secondary)] rounded-2xl p-5">
-        <p className="text-xs text-center text-[var(--text-tertiary)] mb-3">
+      <div className="bg-[var(--bg-card)] rounded-2xl p-5 shadow-card card-enter">
+        <p className="text-xs text-center text-[var(--text-tertiary)] mb-4 font-medium tracking-wide">
           📊 你的数据
         </p>
         <div className="flex justify-around">
           <div className="text-center">
-            <p className="text-2xl font-bold text-[var(--accent)]">{stats.goals}</p>
-            <p className="text-xs text-[var(--text-secondary)]">个目标</p>
+            <p className="text-3xl font-bold text-[var(--accent)] font-display">{stats.goals}</p>
+            <p className="text-xs text-[var(--text-secondary)] mt-1">个目标</p>
           </div>
+          <div className="w-px bg-[var(--border)]" />
           <div className="text-center">
-            <p className="text-2xl font-bold text-[var(--accent)]">{stats.completedDays}</p>
-            <p className="text-xs text-[var(--text-secondary)]">天打卡</p>
+            <p className="text-3xl font-bold text-[var(--accent)] font-display">{stats.completedDays}</p>
+            <p className="text-xs text-[var(--text-secondary)] mt-1">天打卡</p>
           </div>
         </div>
       </div>
@@ -67,33 +68,33 @@ export default function UserCases() {
 
   // 用户没有目标时 → 显示激励性虚拟用户
   return (
-    <div className="bg-[var(--bg-secondary)] rounded-2xl p-4 space-y-3">
-      <div className="text-center mb-2">
-        <p className="text-sm font-medium text-[var(--text-secondary)]">他们都在悄悄变好</p>
+    <div className="bg-[var(--bg-card)] rounded-2xl p-5 shadow-card space-y-3">
+      <div className="text-center mb-3">
+        <p className="text-sm font-semibold text-[var(--text-secondary)]">他们都在悄悄变好</p>
       </div>
-      <div className="space-y-2">
+      <div className="space-y-3">
         {MOCK_USER_CASES.map((user, idx) => (
           <div
             key={idx}
-            className="bg-[var(--bg-card)] rounded-xl p-3 border border-[var(--border)] flex items-start gap-3"
+            className="bg-[var(--bg-secondary)] rounded-xl p-4 flex items-start gap-4 card-enter"
           >
-            <div className="w-10 h-10 rounded-full bg-[var(--accent)] flex items-center justify-center text-lg">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[var(--accent)]/20 to-[var(--accent)]/5 flex items-center justify-center text-xl flex-shrink-0">
               {user.emoji}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-medium text-[var(--text-primary)]">{user.name}</span>
-                <span className="text-xs bg-[var(--accent)]/20 text-[var(--accent)] px-1.5 py-0.5 rounded font-medium">
+                <span className="text-sm font-semibold text-[var(--text-primary)]">{user.name}</span>
+                <span className="text-xs bg-[var(--accent)]/15 text-[var(--accent)] px-2 py-0.5 rounded-full font-medium">
                   🔥 已坚持 {user.days} 天
                 </span>
               </div>
-              <p className="text-xs text-[var(--text-tertiary)] mt-0.5 truncate">"{user.goal}"</p>
+              <p className="text-xs text-[var(--text-tertiary)] mt-1 truncate">"{user.goal}"</p>
               <p className="text-xs text-[var(--text-secondary)] mt-0.5">{user.detail}</p>
             </div>
           </div>
         ))}
       </div>
-      <p className="text-xs text-center text-[var(--text-tertiary)] pt-1">
+      <p className="text-xs text-center text-[var(--text-tertiary)] pt-2">
         你的故事也可以在这里
       </p>
     </div>
