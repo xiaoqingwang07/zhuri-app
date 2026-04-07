@@ -963,31 +963,42 @@ export default function Home() {
                     return (
                       <div
                         key={task.day}
-                        className={`bg-[var(--bg-secondary)] rounded-xl p-4 transition-all ${
+                        className={`bg-[var(--bg-card)] rounded-2xl p-5 transition-all card-enter ${
                           task.completed ? "opacity-60" : ""
                         }`}
                       >
-                        <div className="flex items-start gap-3">
-                          {/* P0-2: Check-in button with pulse animation */}
+                        <div className="flex items-center gap-4">
+                          {/* 打卡按钮 */}
                           <button
                             onClick={() => {
                               if (task.completed) return;
                               handleCheckIn(taskIndex);
                             }}
                             disabled={task.completed}
-                            className={`w-8 h-8 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${
+                            className={`checkin-btn w-14 h-14 rounded-full flex-shrink-0 flex items-center justify-center relative ${
                               task.completed
-                                ? "bg-[var(--success)] border-[var(--success)] text-[var(--text-primary)]"
-                                : justCheckedInDay === taskIndex
-                                ? "border-[var(--success)] bg-[var(--success)]/20 scale-110"
-                                : "border-[var(--accent)] hover:bg-[var(--accent)]/20"
+                                ? "bg-[var(--success)]"
+                                : "bg-gradient-to-br from-[var(--accent)] to-[var(--accent-light)]"
                             }`}
+                            style={!task.completed ? {
+                              boxShadow: '0 4px 16px rgba(255, 107, 53, 0.35)'
+                            } : undefined}
                           >
-                            {task.completed ? "✓" : ""}
+                            {justCheckedInDay === taskIndex && !task.completed && (
+                              <span className="absolute inset-0 rounded-full bg-[var(--accent)] checkin-halo" />
+                            )}
+                            <span className={`relative z-10 text-white font-semibold text-lg ${justCheckedInDay === taskIndex && !task.completed ? "checkin-success" : ""}`}>
+                              {task.completed ? "✓" : "○"}
+                            </span>
                           </button>
                           <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-xs px-2 py-0.5 bg-[var(--bg-primary)] rounded text-[var(--text-secondary)]">
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${
+                                task.type === "reading" ? "bg-blue-500/10 text-blue-500" :
+                                task.type === "notes" ? "bg-yellow-500/10 text-yellow-600" :
+                                task.type === "review" ? "bg-purple-500/10 text-purple-500" :
+                                task.type === "summary" ? "bg-green-500/10 text-green-500" :
+                                "bg-[var(--bg-secondary)] text-[var(--text-secondary)]"}`}>
                                 {task.type === "reading" && "📖 阅读"}
                                 {task.type === "notes" && "📝 笔记"}
                                 {task.type === "review" && "🔍 回顾"}
