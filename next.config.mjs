@@ -1,7 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // output: "export", // Removed - incompatible with dynamic routes
-  // basePath: "/zhuri-app", // Disabled for local dev
+  output: "export",
+  basePath: process.env.NODE_ENV === "production" ? "/zhuri-app" : "",
+  images: { unoptimized: true },
 };
 
 export default nextConfig;

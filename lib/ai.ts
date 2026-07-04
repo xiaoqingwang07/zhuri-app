@@ -3,7 +3,7 @@ import { DayTask } from "./types";
 const WORKER_URL = "https://zhuri-ai-proxy.xiaoqingwang07.workers.dev";
 const DEVICE_ID_KEY = "zhuri_device_id";
 const CUSTOM_API_KEY_STORAGE = "zhuri_custom_api_key";
-const SILICONFLOW_API_URL = "https://api.siliconflow.cn/v1/chat/completions";
+const MINIMAX_API_URL = "https://api.minimaxi.com/v1/chat/completions";
 
 const SYSTEM_PROMPT = `你是目标拆解教练。用户会给你一个目标和天数，你要生成最合理的每日任务计划。
 
@@ -66,14 +66,14 @@ export async function generateTasksWithAI(
 
   if (customKey) {
     // P1-1: Use user's own API key directly (bypass worker proxy)
-    const response = await fetch(SILICONFLOW_API_URL, {
+    const response = await fetch(MINIMAX_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${customKey}`,
       },
       body: JSON.stringify({
-        model: "deepseek-ai/DeepSeek-V3",
+        model: "MiniMax-M3",
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: `目标：${goal}\n总天数：${totalDays}天\n\n根据这个目标，生成${totalDays}天的每日任务计划，严格返回JSON。` },

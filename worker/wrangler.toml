@@ -1,3 +1,11 @@
 name = "zhuri-ai-proxy"
 main = "index.ts"
 compatibility_date = "2024-01-01"
+
+[[kv_namespaces]]
+binding = "ZHURI_DB"
+id = "12af34f768a143388e7169bf68729945"
+
+# Secrets（不要写在这里，用命令设置）：
+#   npx wrangler secret put API_KEY      # MiniMax Token Plan Key（sk-cp- 前缀，必需）
+#   npx wrangler secret put RC_API_KEY   # RevenueCat secret key（可选，启用订阅校验）
