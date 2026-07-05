@@ -1,59 +1,105 @@
 # 逐日 iOS App
 
-「说出你的目标，AI 教练管到底」——用 Expo (React Native) 构建的原生 App。
+Expo + React Native 构建的 AI 目标陪练 App。
+
+## 产品定位
+
+逐日不是普通 Todo，也不是一次性 AI 计划生成器。
+
+它围绕“持续执行”设计：
+
+- 创建目标时先做领域诊断和可行性判断
+- 每天只呈现今日主任务、专项重点和最低完成版
+- 完成时记录真实反馈
+- 落后时 AI 重排剩余计划
+- 每周根据执行数据做复盘
 
 ## 核心功能
 
-- **AI 智能拆解**：一句话目标 → N 天可执行的每日任务计划（可重生成、单条编辑）
-- **AI 动态调整**（杀手锏）：落后时一键让 AI 重排剩余计划，不用推倒重来
-- **AI 教练人格**：温柔鼓励 / 毒舌教练 / 数据理性，督促文案按真实进度生成
-- **每周 AI 复盘**：本周亮点 + 下周建议
-- **打卡激励**：连续 streak、6 档徽章、复活卡补救、成就证书分享图
-- **商业化**：逐日 Pro 订阅 + 复活卡内购（RevenueCat）
+- **目标问诊**：一句话输入目标，默认轻问诊，高级设置可调基础、节奏和时间分布。
+- **AI 领域拆解**：返回目标领域、对象、成功标准、关键里程碑、风险和陪练策略。
+- **可行性拦截**：明显不现实的目标会被提示降级，而不是硬拆成虚假计划。
+- **今日陪练面板**：今日主任务、预计时长、专项重点、验收标准、最低完成版。
+- **完成反馈**：记录实际耗时、难度、卡点和明天调整偏好。
+- **提醒滑动窗口**：未完成时持续提醒，完成后停止后续提醒。
+- **落后救援**：轻松追回、稳定追回、冲刺追回三种重排模式。
+- **复盘页**：查看领先/落后、近 7 天执行和每周 AI 复盘。
+- **Plus 弱入口**：核心陪跑免费，Plus 聚焦多目标、证明档案、深度复盘。
 
 ## 开发
 
 ```bash
 npm install
-npm run ios        # iOS 模拟器（需要 Xcode）
-npm run lint       # ESLint
-npm run typecheck  # TypeScript
+npx expo start
 ```
 
-注意：`react-native-purchases` 需要原生模块，在 Expo Go 中会自动降级为免费模式；
-完整测试内购需要 dev client 或 TestFlight 构建。
-
-## 构建与上架
-
-见 [../docs/launch-guide.md](../docs/launch-guide.md) 和 [../docs/app-store-listing.md](../docs/app-store-listing.md)。
+常用检查：
 
 ```bash
-npx eas build --platform ios --profile production
-npx eas submit --platform ios --latest
+npm run typecheck
+npm run lint
 ```
+
+## Expo Go 测试说明
+
+Expo Go 可以测试核心流程：
+
+- Onboarding
+- 创建目标
+- AI 生成计划
+- 今日任务
+- 完成反馈
+- 目标详情
+- 复盘页
+
+注意：
+
+- `expo-notifications` 在 Expo Go 中能力不完整，完整通知体验需要 dev client 或 TestFlight。
+- `react-native-purchases` 需要原生模块，在 Expo Go 中会自动降级为免费模式。
+- 内购完整测试需要 RevenueCat 配置 + dev client / TestFlight。
 
 ## 目录结构
 
-```
+```text
 src/
-  app/            # expo-router 路由
-    (tabs)/       # 今日 / 日历 / 设置
-    create.tsx    # 创建目标（AI 拆解流程）
-    goal/[id].tsx # 目标详情（复活卡 / AI 重排 / 证书）
-    paywall.tsx   # 付费墙
-    onboarding.tsx
-  components/     # UI 组件（Confetti、BadgeModal、Certificate…）
-  lib/            # 业务逻辑
-    db.ts         # SQLite 存储
-    store.ts      # 打卡 / streak / 徽章 / 复活卡
-    ai.ts         # AI 拆解 / 调整 / 督促 / 复盘（走 Cloudflare Worker）
-    entitlements.ts # Pro 状态与免费配额
-    purchases.ts  # RevenueCat 封装
-    notifications.ts # 本地提醒（7 天滑动窗口）
-  theme/          # 颜色 / 圆角 / 间距
+  app/
+    (tabs)/
+      index.tsx       今日陪练面板
+      calendar.tsx    复盘页
+      settings.tsx    设置 / 提醒 / Plus
+    create.tsx        创建目标与计划确认
+    goal/[id].tsx     目标详情 / 落后救援 / 证书
+    onboarding.tsx    首次引导
+    paywall.tsx       Plus 介绍
+  components/         通用 UI、动效、证书
+  lib/
+    ai.ts             AI 生成 / 重排 / 督促 / 复盘
+    domainCoach.ts    本地域名识别与兜底计划
+    feasibility.ts    目标可行性判断
+    store.ts          打卡、反馈、streak、徽章、复活卡
+    notifications.ts  本地提醒调度
+    purchases.ts      RevenueCat 封装
+    types.ts          核心类型
+  theme/              颜色、圆角、间距
 ```
 
-## 上架前必填配置
+## 上架前配置
 
-1. `src/lib/purchases.ts` → `REVENUECAT_IOS_API_KEY`（RevenueCat iOS Public Key）
-2. Worker 部署最新版（新增 /adjust /coach /review 端点）：`cd ../worker && npx wrangler deploy`
+1. `src/lib/purchases.ts` 填入 `REVENUECAT_IOS_API_KEY`
+2. Cloudflare Worker 部署最新版：
+
+```bash
+cd ../worker
+npx wrangler deploy
+```
+
+3. 确认 Worker secret 已配置：
+
+```bash
+npx wrangler secret put API_KEY
+```
+
+更多上架资料见：
+
+- [../docs/launch-guide.md](../docs/launch-guide.md)
+- [../docs/app-store-listing.md](../docs/app-store-listing.md)
