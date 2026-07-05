@@ -33,7 +33,8 @@ export function Card({
         styles.card,
         {
           backgroundColor: colors.card,
-          shadowOpacity: isDark ? 0 : 0.06,
+          borderColor: colors.border,
+          shadowOpacity: isDark ? 0 : 0.045,
         },
         style,
       ]}
@@ -114,7 +115,11 @@ export function Button({
       disabled={disabled || loading}
       style={[
         styles.button,
-        { backgroundColor: bg, opacity: disabled ? 0.5 : 1 },
+        {
+          backgroundColor: bg,
+          opacity: disabled ? 0.5 : 1,
+          shadowOpacity: variant === "primary" ? 0.18 : 0,
+        },
         style,
       ]}
     >
@@ -191,6 +196,7 @@ export function Chip({
         {
           backgroundColor: active ? colors.primary : colors.card,
           borderColor: active ? colors.primary : colors.border,
+          shadowOpacity: active ? 0.12 : 0,
         },
       ]}
     >
@@ -211,33 +217,42 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: radius.lg,
     padding: spacing.md,
+    borderWidth: StyleSheet.hairlineWidth,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 18,
     elevation: 2,
   },
   button: {
-    height: 52,
+    minHeight: 54,
     borderRadius: radius.md,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: spacing.lg,
+    shadowColor: "#FF6A4A",
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 14,
+    elevation: 2,
   },
   buttonText: {
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "900",
   },
   sectionTitle: {
     fontSize: 13,
-    fontWeight: "600",
+    fontWeight: "900",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 0,
     marginBottom: 8,
   },
   chip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: radius.full,
+    borderRadius: radius.md,
     borderWidth: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
+    elevation: 1,
   },
 });

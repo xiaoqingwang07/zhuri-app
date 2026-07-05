@@ -34,10 +34,9 @@
 
 ### 👤 5. 创建内购品项
 
-按 [app-store-listing.md](app-store-listing.md) 的「内购品项」表格，在 App Store Connect → 功能 → App 内购买项目中创建 3 个品项，然后到 RevenueCat 后台：
+按 [app-store-listing.md](app-store-listing.md) 的「内购品项」表格，在 App Store Connect → 功能 → App 内购买项目中创建 2 个订阅品项，然后到 RevenueCat 后台：
 1. 创建 Entitlement `pro`
 2. 创建 Offering（默认），挂上月度/年度两个 Package
-3. 把消耗型商品 `zhuri_revive_cards_3` 也添加到 Products
 
 ### 👤 6. 签署协议
 

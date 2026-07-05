@@ -5,7 +5,7 @@ import React, {
   useMemo,
   useState,
 } from "react";
-import { adjustPlanWithAI } from "./ai";
+import { adjustPlanWithAI, RescueMode } from "./ai";
 import { deleteGoalRow, kvGet, kvSet, loadGoals, saveGoal } from "./db";
 import {
   checkIn as checkInLogic,
@@ -13,7 +13,16 @@ import {
   createInitialGoal,
   useReviveCard as reviveLogic,
 } from "./store";
-import { Badge, DayTask, Goal, PersonaId } from "./types";
+import {
+  Badge,
+  CheckInFeedback,
+  DEFAULT_GOAL_PROFILE,
+  DayTask,
+  Goal,
+  GoalAnalysis,
+  GoalProfile,
+  PersonaId,
+} from "./types";
 
 const PERSONA_KEY = "persona";
 
@@ -22,10 +31,16 @@ interface GoalsContextValue {
   activeGoals: Goal[];
   persona: PersonaId;
   setPersona: (p: PersonaId) => void;
-  addGoal: (name: string, totalDays: number, tasks: DayTask[]) => Goal;
-  checkIn: (goalId: string, dayIndex: number) => CheckInResult | null;
+  addGoal: (
+    name: string,
+    totalDays: number,
+    tasks: DayTask[],
+    profile?: GoalProfile,
+    analysis?: GoalAnalysis
+  ) => Goal;
+  checkIn: (goalId: string, dayIndex: number, feedback?: CheckInFeedback) => CheckInResult | null;
   revive: (goalId: string) => Goal | null;
-  adjustPlan: (goalId: string) => Promise<string>;
+  adjustPlan: (goalId: string, mode?: RescueMode) => Promise<string>;
   removeGoal: (goalId: string) => void;
   updateGoal: (goal: Goal) => void;
   addReviveCard: (goalId: string, n: number) => void;
@@ -62,8 +77,14 @@ export function GoalsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const addGoal = useCallback(
-    (name: string, totalDays: number, tasks: DayTask[]): Goal => {
-      const goal = createInitialGoal(name, "", totalDays, tasks);
+    (
+      name: string,
+      totalDays: number,
+      tasks: DayTask[],
+      profile: GoalProfile = DEFAULT_GOAL_PROFILE,
+      analysis?: GoalAnalysis
+    ): Goal => {
+      const goal = createInitialGoal(name, "", totalDays, tasks, profile, analysis);
       persist(goal);
       return goal;
     },
@@ -71,10 +92,10 @@ export function GoalsProvider({ children }: { children: React.ReactNode }) {
   );
 
   const checkIn = useCallback(
-    (goalId: string, dayIndex: number): CheckInResult | null => {
+    (goalId: string, dayIndex: number, feedback?: CheckInFeedback): CheckInResult | null => {
       const goal = loadGoals().find((g) => g.id === goalId);
       if (!goal) return null;
-      const result = checkInLogic(goal, dayIndex);
+      const result = checkInLogic(goal, dayIndex, feedback);
       persist(result.goal);
       return result;
     },
@@ -93,10 +114,10 @@ export function GoalsProvider({ children }: { children: React.ReactNode }) {
   );
 
   const adjustPlan = useCallback(
-    async (goalId: string): Promise<string> => {
+    async (goalId: string, mode: RescueMode = "steady"): Promise<string> => {
       const goal = loadGoals().find((g) => g.id === goalId);
       if (!goal) throw new Error("目标不存在");
-      const result = await adjustPlanWithAI(goal);
+      const result = await adjustPlanWithAI(goal, mode);
       persist({
         ...goal,
         tasks: result.tasks,

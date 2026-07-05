@@ -6,12 +6,10 @@ import {
   Text,
   View,
 } from "react-native";
-import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, Card, Chip, SectionTitle } from "@/components/ui";
 import { generateWeeklyReview, WeeklyReview } from "@/lib/ai";
 import { kvGet, kvSet } from "@/lib/db";
-import { isProCached } from "@/lib/entitlements";
 import { useGoals } from "@/lib/GoalsContext";
 import { addDays, diffDays, parseDate, toDateStr, todayStr } from "@/lib/dates";
 import { spacing } from "@/theme/colors";
@@ -22,7 +20,6 @@ const WEEKDAY_LABELS = ["一", "二", "三", "四", "五", "六", "日"];
 export default function CalendarScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const { goals } = useGoals();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [review, setReview] = useState<WeeklyReview | null>(null);
@@ -88,17 +85,6 @@ export default function CalendarScreen() {
   }, []);
 
   const handleReview = async () => {
-    if (!isProCached()) {
-      Alert.alert(
-        "每周 AI 复盘是 Pro 功能",
-        "AI 会分析你本周的执行情况，给出亮点总结和下周建议。",
-        [
-          { text: "取消", style: "cancel" },
-          { text: "了解 Pro", onPress: () => router.push("/paywall") },
-        ]
-      );
-      return;
-    }
     if (goals.length === 0) {
       Alert.alert("还没有目标", "先创建一个目标再来复盘吧。");
       return;
@@ -132,13 +118,13 @@ export default function CalendarScreen() {
         gap: spacing.md,
       }}
     >
-      <Text style={[styles.title, { color: colors.text }]}>日历</Text>
+      <Text style={[styles.title, { color: colors.text }]}>复盘</Text>
 
       {goals.length === 0 ? (
         <Card style={{ alignItems: "center", paddingVertical: spacing.xl, gap: spacing.sm }}>
           <Text style={{ fontSize: 44 }}>📅</Text>
           <Text style={{ color: colors.textSecondary, fontSize: 14 }}>
-            创建目标后，这里会显示你的打卡日历和统计
+            创建目标后，这里会显示你的执行节奏和复盘建议
           </Text>
         </Card>
       ) : (
@@ -302,7 +288,7 @@ export default function CalendarScreen() {
                     AI 分析你本周的执行数据，总结亮点、找出问题，并给出下周的具体建议。
                   </Text>
                   <Button
-                    title={isProCached() ? "生成本周复盘 📊" : "生成本周复盘（Pro）"}
+                    title="生成本周复盘"
                     onPress={handleReview}
                     loading={reviewing}
                     variant="secondary"

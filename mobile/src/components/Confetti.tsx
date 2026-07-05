@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/purity -- 彩纸粒子需要随机参数，仅在 mount 时生成一次 */
 import React, { useEffect, useMemo } from "react";
 import { Dimensions, StyleSheet, View } from "react-native";
 import Animated, {

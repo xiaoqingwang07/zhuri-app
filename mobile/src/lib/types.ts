@@ -7,6 +7,48 @@ export interface DayTask {
   completed: boolean;
   completedAt?: string;
   revived?: boolean; // 通过复活卡补救
+  durationMinutes?: number;
+  difficulty?: "easy" | "normal" | "hard";
+  minimumTask?: string;
+  challengeTask?: string;
+  energy?: "light" | "steady" | "push";
+  rescueNote?: string;
+  proofUri?: string;
+  proofSummary?: string;
+  proofVerifiedAt?: string;
+  focus?: string;
+  rationale?: string;
+  successCheck?: string;
+  coachTip?: string;
+  actualMinutes?: number;
+  feedbackDifficulty?: "too_easy" | "just_right" | "too_hard";
+  blocker?: string;
+  adjustmentPreference?: "keep" | "lighter" | "harder";
+  feedbackAt?: string;
+}
+
+export interface CheckInFeedback {
+  actualMinutes: number;
+  difficulty: "too_easy" | "just_right" | "too_hard";
+  blocker?: string;
+  adjustmentPreference: "keep" | "lighter" | "harder";
+}
+
+export interface GoalProfile {
+  dailyMinutes: number;
+  currentLevel: "beginner" | "some" | "advanced";
+  pace: "gentle" | "steady" | "ambitious";
+  weekdayMode: "same" | "weekend_more" | "workday_more";
+}
+
+export interface GoalAnalysis {
+  domain: string;
+  subject: string;
+  expertiseAngle: string;
+  successCriteria: string[];
+  keyMilestones: string[];
+  riskFactors: string[];
+  coachStrategy: string;
 }
 
 export interface Badge {
@@ -32,6 +74,8 @@ export interface Goal {
   status: "active" | "completed";
   completedAt?: string;
   createdAt: string;
+  profile?: GoalProfile;
+  analysis?: GoalAnalysis;
   /** AI 动态调整过的次数 */
   adjustCount?: number;
   lastAdjustedAt?: string;
@@ -80,9 +124,9 @@ export const BADGES: Badge[] = [
   { id: "legend", name: "长期主义", emoji: "💎", daysRequired: 60 },
 ];
 
-export const MAX_GOALS_PRO = 3;
-export const MAX_GOALS_FREE = 1;
-export const FREE_AI_QUOTA_PER_MONTH = 3;
+export const MAX_GOALS_PRO = 12;
+export const MAX_GOALS_FREE = 3;
+export const FREE_AI_QUOTA_PER_MONTH = 30;
 
 export interface GoalTemplate {
   id: string;
@@ -100,3 +144,10 @@ export const GOAL_TEMPLATES: GoalTemplate[] = [
   { id: "coding", emoji: "💻", title: "学习编程", goal: "学会Python基础，能写简单爬虫", days: 30 },
   { id: "meditation", emoji: "🧘", title: "冥想练习", goal: "养成每天冥想15分钟的习惯", days: 14 },
 ];
+
+export const DEFAULT_GOAL_PROFILE: GoalProfile = {
+  dailyMinutes: 30,
+  currentLevel: "beginner",
+  pace: "steady",
+  weekdayMode: "same",
+};

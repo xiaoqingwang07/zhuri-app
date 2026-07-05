@@ -14,8 +14,20 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: colors.card,
           borderTopColor: colors.border,
+          height: 84,
+          paddingTop: 8,
+          paddingBottom: 18,
+          marginHorizontal: 14,
+          marginBottom: 10,
+          borderRadius: 20,
+          position: "absolute",
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 10 },
+          shadowOpacity: 0.08,
+          shadowRadius: 24,
+          elevation: 8,
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: "900" },
       }}
     >
       <Tabs.Screen
@@ -30,9 +42,9 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="calendar"
         options={{
-          title: "日历",
+          title: "复盘",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="calendar" size={size} color={color} />
+            <Ionicons name="analytics" size={size} color={color} />
           ),
         }}
       />

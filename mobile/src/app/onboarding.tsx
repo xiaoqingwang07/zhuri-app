@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
@@ -8,33 +9,27 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Button } from "@/components/ui";
+import { Button, PressableScale } from "@/components/ui";
 import { kvSet } from "@/lib/db";
-import { spacing } from "@/theme/colors";
+import { radius, spacing } from "@/theme/colors";
 import { useTheme } from "@/theme/useTheme";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 
 const SLIDES = [
   {
-    emoji: "🎯",
-    title: "说出你的目标",
-    desc: "「30天读完一本书」「跑完半马」「学会做饭」——一句话就够了，剩下的交给 AI。",
+    marker: "01",
+    emoji: "☀️",
+    title: "每天只看今天",
+    desc: "逐日先理解你的目标，再把它拆成今天能完成的一步。忙的时候，最低完成版也算数。",
+    tag: "不是清单，是陪练",
   },
   {
-    emoji: "🤖",
-    title: "AI 拆成每日小任务",
-    desc: "AI 教练把大目标拆成每天可执行的小任务，由易到难，还留好休息日。",
-  },
-  {
+    marker: "02",
     emoji: "⚡️",
-    title: "落后了？AI 帮你重排",
-    desc: "断卡不用从头再来。AI 会把剩余计划重新编排，把「放弃点」变成「挽回点」。",
-  },
-  {
-    emoji: "🔥",
-    title: "每天打卡，见证改变",
-    desc: "连续打卡攒徽章，AI 教练每天督促你。完成目标还能生成专属成就证书。",
+    title: "断了也能接回来",
+    desc: "如果计划太满、状态变差或落后几天，逐日会根据真实反馈重排节奏，不用从头再来。",
+    tag: "把放弃点变成救援点",
   },
 ];
 
@@ -48,12 +43,20 @@ export default function OnboardingScreen() {
 
   const finish = () => {
     kvSet("onboarding_done", "1");
-    // 用 replace 而非 dismiss：进入本页可能是声明式 Redirect（无可回退的历史记录）
     router.replace("/");
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <View style={[styles.topBar, { paddingTop: insets.top + spacing.sm }]}>
+        <Text style={[styles.brand, { color: colors.text }]}>逐日</Text>
+        {!isLast && (
+          <PressableScale onPress={finish} style={[styles.skipButton, { backgroundColor: colors.card }]}>
+            <Text style={[styles.skipText, { color: colors.textSecondary }]}>跳过</Text>
+          </PressableScale>
+        )}
+      </View>
+
       <FlatList
         ref={listRef}
         data={SLIDES}
@@ -66,13 +69,18 @@ export default function OnboardingScreen() {
         }
         renderItem={({ item }) => (
           <View style={[styles.slide, { width: SCREEN_W }]}>
-            <Text style={styles.emoji}>{item.emoji}</Text>
-            <Text style={[styles.slideTitle, { color: colors.text }]}>
-              {item.title}
-            </Text>
-            <Text style={[styles.slideDesc, { color: colors.textSecondary }]}>
-              {item.desc}
-            </Text>
+            <View style={[styles.poster, { backgroundColor: colors.card }]}>
+              <View style={[styles.marker, { backgroundColor: colors.primarySoft }]}>
+                <Text style={[styles.markerText, { color: colors.primary }]}>{item.marker}</Text>
+              </View>
+              <Text style={styles.emoji}>{item.emoji}</Text>
+              <Text style={[styles.slideTitle, { color: colors.text }]}>{item.title}</Text>
+              <Text style={[styles.slideDesc, { color: colors.textSecondary }]}>{item.desc}</Text>
+              <View style={[styles.tag, { backgroundColor: colors.primarySoft }]}>
+                <Ionicons name="sparkles" size={14} color={colors.primary} />
+                <Text style={[styles.tagText, { color: colors.primary }]}>{item.tag}</Text>
+              </View>
+            </View>
           </View>
         )}
       />
@@ -86,14 +94,14 @@ export default function OnboardingScreen() {
                 styles.dot,
                 {
                   backgroundColor: i === index ? colors.primary : colors.border,
-                  width: i === index ? 24 : 8,
+                  width: i === index ? 28 : 8,
                 },
               ]}
             />
           ))}
         </View>
         <Button
-          title={isLast ? "开始逐日 🚀" : "下一步"}
+          title={isLast ? "开始陪跑" : "继续"}
           onPress={() => {
             if (isLast) {
               finish();
@@ -104,39 +112,84 @@ export default function OnboardingScreen() {
           }}
           style={{ marginHorizontal: spacing.md }}
         />
-        {!isLast && (
-          <Text
-            style={[styles.skip, { color: colors.textTertiary }]}
-            onPress={finish}
-          >
-            跳过
-          </Text>
-        )}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  topBar: {
+    paddingHorizontal: spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  brand: {
+    fontSize: 22,
+    fontWeight: "900",
+  },
+  skipButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+  },
+  skipText: {
+    fontSize: 13,
+    fontWeight: "800",
+  },
   slide: {
     flex: 1,
-    alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.md,
+  },
+  poster: {
+    minHeight: 460,
+    borderRadius: radius.xl,
+    padding: spacing.xl,
+    justifyContent: "center",
     gap: spacing.md,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.08,
+    shadowRadius: 30,
+    elevation: 4,
+  },
+  marker: {
+    alignSelf: "flex-start",
+    borderRadius: radius.full,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  markerText: {
+    fontSize: 12,
+    fontWeight: "900",
   },
   emoji: {
-    fontSize: 88,
+    fontSize: 82,
+    marginTop: spacing.lg,
   },
   slideTitle: {
-    fontSize: 26,
+    fontSize: 34,
+    lineHeight: 40,
     fontWeight: "900",
-    textAlign: "center",
   },
   slideDesc: {
-    fontSize: 15,
-    lineHeight: 24,
-    textAlign: "center",
+    fontSize: 16,
+    lineHeight: 25,
+  },
+  tag: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: radius.full,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: spacing.sm,
+  },
+  tagText: {
+    fontSize: 12,
+    fontWeight: "900",
   },
   footer: {
     gap: spacing.md,
@@ -149,10 +202,5 @@ const styles = StyleSheet.create({
   dot: {
     height: 8,
     borderRadius: 4,
-  },
-  skip: {
-    textAlign: "center",
-    fontSize: 14,
-    paddingVertical: 4,
   },
 });

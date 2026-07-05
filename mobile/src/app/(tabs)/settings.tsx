@@ -86,7 +86,7 @@ export default function SettingsScreen() {
       const isPro = await restorePurchases();
       Alert.alert(
         isPro ? "恢复成功" : "未找到购买记录",
-        isPro ? "已恢复你的 Pro 会员。" : "该 Apple 账号下没有可恢复的购买。"
+        isPro ? "已恢复你的 Plus 权益。" : "该 Apple 账号下没有可恢复的购买。"
       );
     } catch {
       Alert.alert("恢复失败", "请稍后再试。");
@@ -107,7 +107,7 @@ export default function SettingsScreen() {
     >
       <Text style={[styles.title, { color: colors.text }]}>设置</Text>
 
-      {/* Pro 卡片 */}
+      {/* 支持卡片 */}
       <PressableScale onPress={() => router.push("/paywall")}>
         <Card
           style={{
@@ -120,12 +120,12 @@ export default function SettingsScreen() {
           <Text style={{ fontSize: 32 }}>{pro ? "👑" : "✨"}</Text>
           <View style={{ flex: 1 }}>
             <Text style={[styles.proTitle, { color: colors.text }]}>
-              {pro ? "逐日 Pro 已开通" : "升级逐日 Pro"}
+              {pro ? "逐日 Plus 已开通" : "了解逐日 Plus"}
             </Text>
             <Text style={{ fontSize: 13, color: colors.textSecondary }}>
               {pro
-                ? "感谢支持，享受全部 AI 教练功能"
-                : "多目标并行 · 无限 AI 拆解 · AI 动态调整 · 每周复盘"}
+                ? "多目标、证明档案和深度复盘已解锁"
+                : "核心功能免费，Plus 解锁证明上传、多目标和深度复盘"}
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
@@ -187,8 +187,8 @@ export default function SettingsScreen() {
           </View>
           {reminderOn && (
             <View style={{ gap: spacing.sm }}>
-              <Text style={{ fontSize: 13, color: colors.textSecondary }}>
-                提醒时间（未打卡时 AI 教练会来督促你）
+              <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 19 }}>
+                从这个时间开始，如果今天还没完成，逐日会持续提醒；完成当日任务后自动停止后续提醒。
               </Text>
               <View style={styles.chipRow}>
                 {HOUR_OPTIONS.map((h) => (

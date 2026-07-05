@@ -24,27 +24,42 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, Card, Chip, PressableScale } from "@/components/ui";
 import { generateTasksWithFallback } from "@/lib/ai";
-import {
-  consumeAIQuota,
-  isProCached,
-  remainingAIQuota,
-} from "@/lib/entitlements";
+import { consumeAIQuota, isProCached, remainingAIQuota } from "@/lib/entitlements";
+import { evaluateGoalFeasibility } from "@/lib/feasibility";
 import { useGoals } from "@/lib/GoalsContext";
-import { DayTask, GOAL_TEMPLATES } from "@/lib/types";
+import { DEFAULT_GOAL_PROFILE, DayTask, GOAL_TEMPLATES, GoalAnalysis, GoalProfile } from "@/lib/types";
 import { radius, spacing } from "@/theme/colors";
 import { useTheme } from "@/theme/useTheme";
 
 type Step = "input" | "loading" | "confirm";
 
 const DAY_OPTIONS = [7, 14, 21, 30, 60, 100];
+const MINUTE_OPTIONS = [15, 25, 40, 60];
+
+const LEVEL_OPTIONS: { label: string; value: GoalProfile["currentLevel"] }[] = [
+  { label: "刚开始", value: "beginner" },
+  { label: "有一点基础", value: "some" },
+  { label: "已经熟悉", value: "advanced" },
+];
+
+const PACE_OPTIONS: { label: string; value: GoalProfile["pace"]; desc: string }[] = [
+  { label: "轻松接住", value: "gentle", desc: "先稳住节奏" },
+  { label: "稳定推进", value: "steady", desc: "每天做一点" },
+  { label: "冲刺一点", value: "ambitious", desc: "更有挑战感" },
+];
+
+const WEEKDAY_OPTIONS: { label: string; value: GoalProfile["weekdayMode"] }[] = [
+  { label: "每天差不多", value: "same" },
+  { label: "周末多做", value: "weekend_more" },
+  { label: "工作日多做", value: "workday_more" },
+];
 
 const LOADING_HINTS = [
-  "AI 教练正在分析你的目标…",
-  "拆解成每天可执行的小任务…",
-  "由易到难安排节奏…",
-  "留出休息和缓冲时间…",
-  "通常需要 20–40 秒，请稍候…",
-  "快好了，正在最后检查…",
+  "先判断这是不是一个会半路崩掉的计划…",
+  "给你留最低完成版，忙的时候也能不断档…",
+  "把前几天调轻一点，先让身体进入节奏…",
+  "正在安排缓冲日，防止计划太脆…",
+  "最后检查：每天能不能真的做完…",
 ];
 
 function LoadingView() {
@@ -71,10 +86,10 @@ function LoadingView() {
   return (
     <View style={styles.loadingContainer}>
       <Animated.View style={spinStyle}>
-        <Text style={{ fontSize: 56 }}>⚙️</Text>
+        <Text style={{ fontSize: 56 }}>☀️</Text>
       </Animated.View>
       <Text style={[styles.loadingTitle, { color: colors.text }]}>
-        AI 正在拆解你的目标
+        正在生成陪跑计划
       </Text>
       <Animated.Text
         key={hintIndex}
@@ -83,6 +98,27 @@ function LoadingView() {
       >
         {LOADING_HINTS[hintIndex]}
       </Animated.Text>
+    </View>
+  );
+}
+
+function TaskMeta({ task }: { task: DayTask }) {
+  const { colors } = useTheme();
+  const difficultyText =
+    task.difficulty === "hard" ? "挑战" : task.difficulty === "easy" ? "轻量" : "标准";
+  return (
+    <View style={styles.metaRow}>
+      <Text style={[styles.metaPill, { color: colors.primary, backgroundColor: colors.primarySoft }]}>
+        {task.durationMinutes || 30} 分钟
+      </Text>
+      <Text style={[styles.metaPill, { color: colors.textSecondary, backgroundColor: colors.background }]}>
+        {difficultyText}
+      </Text>
+      {!!task.pages && (
+        <Text style={[styles.metaPill, { color: colors.textSecondary, backgroundColor: colors.background }]}>
+          {task.pages}
+        </Text>
+      )}
     </View>
   );
 }
@@ -96,27 +132,68 @@ export default function CreateGoalScreen() {
   const [step, setStep] = useState<Step>("input");
   const [goalText, setGoalText] = useState("");
   const [days, setDays] = useState(21);
+  const [profile, setProfile] = useState<GoalProfile>(DEFAULT_GOAL_PROFILE);
   const [tasks, setTasks] = useState<DayTask[]>([]);
+  const [goalAnalysis, setGoalAnalysis] = useState<GoalAnalysis | null>(null);
   const [usedAI, setUsedAI] = useState(true);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editText, setEditText] = useState("");
+  const [acceptedStretchGoal, setAcceptedStretchGoal] = useState<string | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const generatingRef = useRef(false);
 
-  const generate = useCallback(async () => {
+  const updateProfile = useCallback((patch: Partial<GoalProfile>) => {
+    setProfile((prev) => ({ ...prev, ...patch }));
+  }, []);
+
+  const generate = useCallback(async (skipStretchWarning = false) => {
     if (generatingRef.current) return;
     const goal = goalText.trim();
     if (!goal) {
-      Alert.alert("请先输入目标", "比如：读完《原则》、跑完半马、学会做10道菜");
+      Alert.alert("先说出目标", "比如：30天读完一本书、跑完半马、学会做10道菜");
       return;
     }
-    const quota = remainingAIQuota(isProCached());
-    if (quota <= 0) {
+
+    const feasibility = evaluateGoalFeasibility(goal, days, profile);
+    if (feasibility.level === "unrealistic") {
       Alert.alert(
-        "本月 AI 拆解次数已用完",
-        "升级 Pro 解锁无限次 AI 拆解，或下月再来。",
+        feasibility.title,
+        `${feasibility.message}\n\n${feasibility.suggestion}`,
         [
-          { text: "取消", style: "cancel" },
-          { text: "了解 Pro", onPress: () => router.push("/paywall") },
+          { text: "我再改改", style: "cancel" },
+          ...(feasibility.revisedGoal
+            ? [
+                {
+                  text: "改成推荐目标",
+                  onPress: () => {
+                    setGoalText(feasibility.revisedGoal || goal);
+                    setAcceptedStretchGoal(null);
+                  },
+                },
+              ]
+            : []),
+        ]
+      );
+      return;
+    }
+
+    if (
+      feasibility.level === "stretch" &&
+      acceptedStretchGoal !== goal &&
+      !skipStretchWarning
+    ) {
+      Alert.alert(
+        feasibility.title,
+        `${feasibility.message}\n\n${feasibility.suggestion}`,
+        [
+          { text: "先改目标", style: "cancel" },
+          {
+            text: "继续生成",
+            onPress: () => {
+              setAcceptedStretchGoal(goal);
+              generate(true);
+            },
+          },
         ]
       );
       return;
@@ -125,39 +202,45 @@ export default function CreateGoalScreen() {
     generatingRef.current = true;
     setStep("loading");
     try {
-      const result = await generateTasksWithFallback(goal, days);
-      if (result.usedAI) consumeAIQuota();
+      const result = await generateTasksWithFallback(goal, days, profile);
+      if (result.usedAI && remainingAIQuota(isProCached()) > 0) consumeAIQuota();
       setTasks(result.tasks);
+      setGoalAnalysis(result.analysis);
       setUsedAI(result.usedAI);
       setStep("confirm");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } finally {
       generatingRef.current = false;
     }
-  }, [goalText, days, router]);
+  }, [goalText, days, profile, acceptedStretchGoal]);
 
   const confirm = useCallback(() => {
-    addGoal(goalText.trim(), days, tasks);
+    addGoal(goalText.trim(), days, tasks, profile, goalAnalysis || undefined);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.dismiss();
-  }, [addGoal, goalText, days, tasks, router]);
+  }, [addGoal, goalText, days, tasks, profile, goalAnalysis, router]);
 
   const saveEdit = useCallback(() => {
     if (editingIndex === null) return;
     setTasks((prev) => {
       const next = [...prev];
-      next[editingIndex] = { ...next[editingIndex], task: editText.trim() || next[editingIndex].task };
+      next[editingIndex] = {
+        ...next[editingIndex],
+        task: editText.trim() || next[editingIndex].task,
+        challengeTask: editText.trim() || next[editingIndex].challengeTask,
+      };
       return next;
     });
     setEditingIndex(null);
   }, [editingIndex, editText]);
+
+  const remaining = remainingAIQuota(isProCached());
 
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: colors.background }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      {/* 顶部栏 */}
       <View style={[styles.topBar, { paddingTop: insets.top > 0 ? insets.top : spacing.md }]}>
         <PressableScale
           onPress={() => {
@@ -173,7 +256,7 @@ export default function CreateGoalScreen() {
           />
         </PressableScale>
         <Text style={[styles.topTitle, { color: colors.text }]}>
-          {step === "confirm" ? "确认计划" : "创建目标"}
+          {step === "confirm" ? "确认陪跑计划" : "目标问诊"}
         </Text>
         <View style={{ width: 40 }} />
       </View>
@@ -185,6 +268,16 @@ export default function CreateGoalScreen() {
           contentContainerStyle={{ padding: spacing.md, gap: spacing.lg, paddingBottom: 40 }}
           keyboardShouldPersistTaps="handled"
         >
+          <View style={styles.heroBlock}>
+            <Text style={[styles.heroKicker, { color: colors.primary }]}>断了也能接回来</Text>
+            <Text style={[styles.heroTitle, { color: colors.text }]}>
+              一句话，先生成能执行的陪跑。
+            </Text>
+            <Text style={[styles.heroDesc, { color: colors.textSecondary }]}>
+              先给你一版今天就能开始的计划；想更细，再调基础、节奏和时间分布。
+            </Text>
+          </View>
+
           <View style={{ gap: spacing.sm }}>
             <Text style={[styles.label, { color: colors.text }]}>你想完成什么？</Text>
             <TextInput
@@ -205,52 +298,129 @@ export default function CreateGoalScreen() {
           </View>
 
           <View style={{ gap: spacing.sm }}>
-            <Text style={[styles.label, { color: colors.text }]}>用多少天完成？</Text>
+            <Text style={[styles.label, { color: colors.text }]}>计划周期</Text>
             <View style={styles.chipRow}>
               {DAY_OPTIONS.map((d) => (
+                <Chip key={d} label={`${d}天`} active={days === d} onPress={() => setDays(d)} />
+              ))}
+            </View>
+          </View>
+
+          <Card style={styles.diagnosisCard}>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>计划手感</Text>
+            <Text style={[styles.cardDesc, { color: colors.textSecondary }]}>
+              先定每天投入时间，其他交给 AI 判断。
+            </Text>
+
+            <View style={styles.questionBlock}>
+              <Text style={[styles.questionTitle, { color: colors.text }]}>每天大概能投入多久？</Text>
+              <View style={styles.chipRow}>
+                {MINUTE_OPTIONS.map((m) => (
+                  <Chip
+                    key={m}
+                    label={`${m}分钟`}
+                    active={profile.dailyMinutes === m}
+                    onPress={() => updateProfile({ dailyMinutes: m })}
+                  />
+                ))}
+              </View>
+            </View>
+
+            <PressableScale
+              onPress={() => setShowAdvanced((v) => !v)}
+              style={[styles.advancedToggle, { backgroundColor: colors.background }]}
+            >
+              <Text style={[styles.advancedText, { color: colors.textSecondary }]}>
+                {showAdvanced ? "收起高级设置" : "展开高级设置"}
+              </Text>
+              <Ionicons
+                name={showAdvanced ? "chevron-up" : "chevron-down"}
+                size={18}
+                color={colors.textTertiary}
+              />
+            </PressableScale>
+
+            {showAdvanced && (
+              <>
+                <View style={styles.questionBlock}>
+                  <Text style={[styles.questionTitle, { color: colors.text }]}>你现在的基础？</Text>
+                  <View style={styles.chipRow}>
+                    {LEVEL_OPTIONS.map((item) => (
+                      <Chip
+                        key={item.value}
+                        label={item.label}
+                        active={profile.currentLevel === item.value}
+                        onPress={() => updateProfile({ currentLevel: item.value })}
+                      />
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.questionBlock}>
+                  <Text style={[styles.questionTitle, { color: colors.text }]}>想要什么节奏？</Text>
+                  <View style={{ gap: spacing.sm }}>
+                    {PACE_OPTIONS.map((item) => {
+                      const active = profile.pace === item.value;
+                      return (
+                        <PressableScale key={item.value} onPress={() => updateProfile({ pace: item.value })}>
+                          <View
+                            style={[
+                              styles.paceRow,
+                              {
+                                backgroundColor: active ? colors.primarySoft : colors.background,
+                                borderColor: active ? colors.primary : colors.border,
+                              },
+                            ]}
+                          >
+                            <View>
+                              <Text style={[styles.paceTitle, { color: colors.text }]}>{item.label}</Text>
+                              <Text style={[styles.paceDesc, { color: colors.textSecondary }]}>{item.desc}</Text>
+                            </View>
+                            {active && <Ionicons name="checkmark-circle" size={22} color={colors.primary} />}
+                          </View>
+                        </PressableScale>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                <View style={styles.questionBlock}>
+                  <Text style={[styles.questionTitle, { color: colors.text }]}>你的时间分布？</Text>
+                  <View style={styles.chipRow}>
+                    {WEEKDAY_OPTIONS.map((item) => (
+                      <Chip
+                        key={item.value}
+                        label={item.label}
+                        active={profile.weekdayMode === item.value}
+                        onPress={() => updateProfile({ weekdayMode: item.value })}
+                      />
+                    ))}
+                  </View>
+                </View>
+              </>
+            )}
+          </Card>
+
+          <View style={{ gap: spacing.sm }}>
+            <Text style={[styles.label, { color: colors.text }]}>没想好？试试这些</Text>
+            <View style={styles.chipRow}>
+              {GOAL_TEMPLATES.map((t) => (
                 <Chip
-                  key={d}
-                  label={`${d}天`}
-                  active={days === d}
-                  onPress={() => setDays(d)}
+                  key={t.id}
+                  label={`${t.emoji} ${t.title}`}
+                  onPress={() => {
+                    setGoalText(t.goal);
+                    setDays(t.days);
+                  }}
                 />
               ))}
             </View>
           </View>
 
-          <View style={{ gap: spacing.sm }}>
-            <Text style={[styles.label, { color: colors.text }]}>或者试试这些</Text>
-            <View style={{ gap: spacing.sm }}>
-              {GOAL_TEMPLATES.map((t) => (
-                <PressableScale
-                  key={t.id}
-                  onPress={() => {
-                    setGoalText(t.goal);
-                    setDays(t.days);
-                  }}
-                >
-                  <Card style={styles.templateCard}>
-                    <Text style={{ fontSize: 28 }}>{t.emoji}</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.templateTitle, { color: colors.text }]}>
-                        {t.title}
-                      </Text>
-                      <Text style={[styles.templateDesc, { color: colors.textSecondary }]}>
-                        {t.goal} · {t.days}天
-                      </Text>
-                    </View>
-                  </Card>
-                </PressableScale>
-              ))}
-            </View>
-          </View>
-
-          <Button title="让 AI 拆解目标 ✨" onPress={generate} />
-          {!isProCached() && (
-            <Text style={[styles.quotaHint, { color: colors.textTertiary }]}>
-              本月剩余 {remainingAIQuota(false)} 次免费 AI 拆解
-            </Text>
-          )}
+          <Button title="生成我的陪跑计划" onPress={() => generate()} />
+          <Text style={[styles.quotaHint, { color: colors.textTertiary }]}>
+            本月还有 {remaining === Infinity ? "充足" : remaining} 次 AI 生成；失败时会自动用本地计划兜底
+          </Text>
         </ScrollView>
       )}
 
@@ -259,12 +429,49 @@ export default function CreateGoalScreen() {
           <ScrollView
             contentContainerStyle={{ padding: spacing.md, gap: spacing.sm, paddingBottom: 140 }}
           >
-            <Card style={{ gap: 4 }}>
-              <Text style={[styles.confirmGoal, { color: colors.text }]}>{goalText}</Text>
-              <Text style={[styles.confirmMeta, { color: colors.textSecondary }]}>
-                共 {tasks.length} 天 · {usedAI ? "AI 智能拆解" : "本地模板（AI 暂不可用）"}
-              </Text>
+            <Card style={styles.summaryCard}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.confirmGoal, { color: colors.text }]}>{goalText}</Text>
+                <Text style={[styles.confirmMeta, { color: colors.textSecondary }]}>
+                  共 {tasks.length} 天 · 每天约 {profile.dailyMinutes} 分钟 · {usedAI ? "AI 陪跑生成" : "本地陪跑计划"}
+                </Text>
+              </View>
+              <Text style={styles.summaryEmoji}>🌤️</Text>
             </Card>
+
+            {goalAnalysis && (
+              <Card style={styles.analysisCard}>
+                <View style={styles.analysisHeader}>
+                  <View>
+                    <Text style={[styles.analysisKicker, { color: colors.primary }]}>
+                      AI 对这个目标的理解
+                    </Text>
+                    <Text style={[styles.analysisTitle, { color: colors.text }]}>
+                      {goalAnalysis.domain} · {goalAnalysis.subject}
+                    </Text>
+                  </View>
+                  <Ionicons name="sparkles" size={22} color={colors.primary} />
+                </View>
+                <Text style={[styles.analysisBody, { color: colors.textSecondary }]}>
+                  {goalAnalysis.expertiseAngle}
+                </Text>
+                <View style={[styles.strategyBox, { backgroundColor: colors.background }]}>
+                  <Text style={[styles.strategyLabel, { color: colors.textTertiary }]}>陪练策略</Text>
+                  <Text style={[styles.strategyText, { color: colors.text }]}>
+                    {goalAnalysis.coachStrategy}
+                  </Text>
+                </View>
+                <View style={styles.analysisList}>
+                  {goalAnalysis.keyMilestones.slice(0, 4).map((item) => (
+                    <View key={item} style={[styles.analysisChip, { backgroundColor: colors.primarySoft }]}>
+                      <Text style={[styles.analysisChipText, { color: colors.textSecondary }]}>
+                        {item}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </Card>
+            )}
 
             {tasks.map((task, i) => (
               <PressableScale
@@ -276,19 +483,27 @@ export default function CreateGoalScreen() {
               >
                 <Card style={styles.taskRow}>
                   <View style={[styles.dayBubble, { backgroundColor: colors.primarySoft }]}>
-                    <Text style={[styles.dayBubbleText, { color: colors.primary }]}>
-                      {task.day}
-                    </Text>
+                    <Text style={[styles.dayBubbleText, { color: colors.primary }]}>D{task.day}</Text>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.taskRowText, { color: colors.text }]}>
-                      {task.task}
-                    </Text>
-                    {!!task.pages && (
-                      <Text style={[styles.taskRowMeta, { color: colors.textTertiary }]}>
-                        {task.pages}
+                  <View style={{ flex: 1, gap: 6 }}>
+                    <Text style={[styles.taskRowText, { color: colors.text }]}>{task.task}</Text>
+                    <TaskMeta task={task} />
+                    {!!task.focus && (
+                      <Text style={[styles.taskFocus, { color: colors.primary }]}>
+                        今日重点：{task.focus}
                       </Text>
                     )}
+                    {!!task.successCheck && (
+                      <Text style={[styles.taskCheck, { color: colors.textSecondary }]}>
+                        验收：{task.successCheck}
+                      </Text>
+                    )}
+                    <View style={[styles.minimumBox, { backgroundColor: colors.background }]}>
+                      <Text style={[styles.minimumLabel, { color: colors.textTertiary }]}>最低完成版</Text>
+                      <Text style={[styles.minimumText, { color: colors.textSecondary }]}>
+                        {task.minimumTask || "先做 10 分钟，保住节奏"}
+                      </Text>
+                    </View>
                   </View>
                   <Ionicons name="pencil" size={16} color={colors.textTertiary} />
                 </Card>
@@ -306,18 +521,12 @@ export default function CreateGoalScreen() {
               },
             ]}
           >
-            <Button
-              title="重新生成"
-              variant="secondary"
-              onPress={generate}
-              style={{ flex: 1 }}
-            />
-            <Button title="开始执行 🚀" onPress={confirm} style={{ flex: 2 }} />
+            <Button title="重新生成" variant="secondary" onPress={() => generate()} style={{ flex: 1 }} />
+            <Button title="开始陪跑" onPress={confirm} style={{ flex: 2 }} />
           </View>
         </>
       )}
 
-      {/* 单条任务编辑 */}
       <Modal
         visible={editingIndex !== null}
         transparent
@@ -372,7 +581,7 @@ const styles = StyleSheet.create({
   },
   topTitle: {
     fontSize: 17,
-    fontWeight: "700",
+    fontWeight: "800",
   },
   closeButton: {
     width: 40,
@@ -381,13 +590,30 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  heroBlock: {
+    gap: spacing.sm,
+    paddingTop: spacing.sm,
+  },
+  heroKicker: {
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  heroTitle: {
+    fontSize: 30,
+    lineHeight: 36,
+    fontWeight: "900",
+  },
+  heroDesc: {
+    fontSize: 15,
+    lineHeight: 23,
+  },
   label: {
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "800",
   },
   input: {
-    minHeight: 88,
-    borderRadius: radius.md,
+    minHeight: 92,
+    borderRadius: radius.lg,
     borderWidth: 1,
     padding: spacing.md,
     fontSize: 16,
@@ -399,6 +625,53 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: spacing.sm,
   },
+  diagnosisCard: {
+    gap: spacing.md,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  cardDesc: {
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: -10,
+  },
+  questionBlock: {
+    gap: spacing.sm,
+  },
+  questionTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  advancedToggle: {
+    minHeight: 44,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  advancedText: {
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  paceRow: {
+    borderWidth: 1,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  paceTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  paceDesc: {
+    fontSize: 12,
+    marginTop: 2,
+  },
   templateCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -407,7 +680,7 @@ const styles = StyleSheet.create({
   },
   templateTitle: {
     fontSize: 15,
-    fontWeight: "700",
+    fontWeight: "800",
   },
   templateDesc: {
     fontSize: 12,
@@ -416,6 +689,7 @@ const styles = StyleSheet.create({
   quotaHint: {
     textAlign: "center",
     fontSize: 12,
+    lineHeight: 17,
   },
   loadingContainer: {
     flex: 1,
@@ -425,44 +699,137 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
   },
   loadingTitle: {
-    fontSize: 20,
-    fontWeight: "800",
+    fontSize: 22,
+    fontWeight: "900",
   },
   loadingHint: {
     fontSize: 14,
+    textAlign: "center",
+    lineHeight: 21,
+  },
+  summaryCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  summaryEmoji: {
+    fontSize: 36,
   },
   confirmGoal: {
-    fontSize: 18,
-    fontWeight: "800",
+    fontSize: 19,
+    fontWeight: "900",
   },
   confirmMeta: {
     fontSize: 13,
+    marginTop: 4,
+  },
+  analysisCard: {
+    gap: spacing.md,
+  },
+  analysisHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+  },
+  analysisKicker: {
+    fontSize: 12,
+    fontWeight: "900",
+    marginBottom: 4,
+  },
+  analysisTitle: {
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: "900",
+  },
+  analysisBody: {
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  strategyBox: {
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    gap: 4,
+  },
+  strategyLabel: {
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  strategyText: {
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "700",
+  },
+  analysisList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  analysisChip: {
+    borderRadius: radius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  analysisChipText: {
+    fontSize: 12,
+    fontWeight: "800",
   },
   taskRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: spacing.sm,
-    paddingVertical: 12,
+    paddingVertical: 14,
   },
   dayBubble: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
   },
   dayBubbleText: {
-    fontSize: 13,
-    fontWeight: "800",
+    fontSize: 12,
+    fontWeight: "900",
   },
   taskRowText: {
     fontSize: 15,
-    fontWeight: "600",
-    lineHeight: 20,
+    fontWeight: "800",
+    lineHeight: 21,
   },
-  taskRowMeta: {
+  taskFocus: {
     fontSize: 12,
-    marginTop: 2,
+    lineHeight: 17,
+    fontWeight: "900",
+  },
+  taskCheck: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  metaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  metaPill: {
+    fontSize: 11,
+    fontWeight: "800",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    overflow: "hidden",
+  },
+  minimumBox: {
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    gap: 2,
+  },
+  minimumLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  minimumText: {
+    fontSize: 13,
+    lineHeight: 18,
   },
   bottomBar: {
     position: "absolute",

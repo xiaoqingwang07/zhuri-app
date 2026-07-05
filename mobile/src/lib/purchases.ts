@@ -13,8 +13,6 @@ import { setProCached } from "./entitlements";
 const REVENUECAT_IOS_API_KEY = "";
 
 export const ENTITLEMENT_PRO = "pro";
-/** 消耗型内购：3 张复活卡 */
-export const PRODUCT_REVIVE_CARDS = "zhuri_revive_cards_3";
 
 let configured = false;
 
@@ -81,16 +79,6 @@ export async function purchasePackage(pkg: PurchasesPackage): Promise<boolean> {
   const isPro = customerInfo.entitlements.active[ENTITLEMENT_PRO] !== undefined;
   setProCached(isPro);
   return isPro;
-}
-
-/** 购买复活卡（消耗型），成功后由调用方入账到目标 */
-export async function purchaseReviveCards(): Promise<boolean> {
-  const Purchases = getPurchases();
-  if (!configured || !Purchases) return false;
-  const products = await Purchases.getProducts([PRODUCT_REVIVE_CARDS]);
-  if (products.length === 0) return false;
-  await Purchases.purchaseStoreProduct(products[0]);
-  return true;
 }
 
 export async function restorePurchases(): Promise<boolean> {

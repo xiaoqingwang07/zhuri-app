@@ -1,12 +1,19 @@
 import * as Crypto from "expo-crypto";
 import { addDays, todayStr } from "./dates";
-import { BADGES, DayTask, Goal } from "./types";
+import {
+  buildDomainTaskDraft,
+  buildFallbackGoalAnalysis,
+  enrichTaskWithDomainContext,
+} from "./domainCoach";
+import { BADGES, CheckInFeedback, DEFAULT_GOAL_PROFILE, DayTask, Goal, GoalAnalysis, GoalProfile } from "./types";
 
 export function createInitialGoal(
   name: string,
   description: string,
   totalDays: number,
-  tasks: DayTask[]
+  tasks: DayTask[],
+  profile: GoalProfile = DEFAULT_GOAL_PROFILE,
+  analysis?: GoalAnalysis
 ): Goal {
   const now = new Date().toISOString();
   return {
@@ -23,6 +30,8 @@ export function createInitialGoal(
     badges: BADGES.map((b) => ({ ...b })),
     status: "active",
     createdAt: now,
+    profile,
+    analysis,
     adjustCount: 0,
   };
 }
@@ -60,12 +69,21 @@ export interface CheckInResult {
   justCompleted: boolean;
 }
 
-export function checkIn(goal: Goal, dayIndex: number): CheckInResult {
+export function checkIn(
+  goal: Goal,
+  dayIndex: number,
+  feedback?: CheckInFeedback
+): CheckInResult {
   const updatedTasks = [...goal.tasks];
   updatedTasks[dayIndex] = {
     ...updatedTasks[dayIndex],
     completed: true,
     completedAt: new Date().toISOString(),
+    actualMinutes: feedback?.actualMinutes,
+    feedbackDifficulty: feedback?.difficulty,
+    blocker: feedback?.blocker,
+    adjustmentPreference: feedback?.adjustmentPreference,
+    feedbackAt: feedback ? new Date().toISOString() : undefined,
   };
 
   const streak = calcStreak(updatedTasks);
@@ -161,19 +179,51 @@ export function completionRate(goal: Goal): number {
 /** AI 失败时的本地降级任务生成（从 Web 版移植） */
 export function generateDefaultTasks(
   totalDays: number,
-  goalName: string
+  goalName: string,
+  profile: GoalProfile = DEFAULT_GOAL_PROFILE
 ): DayTask[] {
   const tasks: DayTask[] = [];
   const g = goalName;
+  const analysis = buildFallbackGoalAnalysis(goalName, profile);
   const isReading = /读|书|阅读|看完|《/.test(g);
   const isCoding = /开发|编程|代码|app|程序|网站|项目|上线|功能|产品/i.test(g);
   const isFitness = /跑|健身|运动|锻炼|马拉松|公里|游泳|骑车|减肥|减重/.test(g);
   const isLearning = /学|技能|课程|语言|英语|吉他|钢琴|乐器|设计|画|绘|考证|证书/.test(g);
   const isHabit = /习惯|早起|冥想|打卡|坚持|戒/.test(g);
 
+  const durationBase =
+    profile.pace === "gentle"
+      ? Math.max(10, Math.round(profile.dailyMinutes * 0.75))
+      : profile.pace === "ambitious"
+        ? Math.round(profile.dailyMinutes * 1.15)
+        : profile.dailyMinutes;
+
+  const getDifficulty = (progress: number): DayTask["difficulty"] => {
+    if (profile.pace === "gentle") return progress < 0.65 ? "easy" : "normal";
+    if (profile.pace === "ambitious") return progress < 0.25 ? "normal" : "hard";
+    return progress < 0.2 ? "easy" : progress > 0.75 ? "hard" : "normal";
+  };
+
+  const makeVariants = (task: string, pages: string, progress: number) => {
+    const minutes = Math.max(
+      8,
+      Math.round(durationBase * (progress < 0.15 ? 0.8 : progress > 0.75 ? 1.15 : 1))
+    );
+    return {
+      durationMinutes: minutes,
+      difficulty: getDifficulty(progress),
+      minimumTask: pages ? `完成 ${pages} 的一半，先不断档` : "先做 10 分钟，保住节奏",
+      challengeTask: task,
+      energy: progress < 0.18 ? "light" : progress > 0.78 ? "push" : "steady",
+    } satisfies Partial<DayTask>;
+  };
+
   const getTask = (
     i: number
   ): { task: string; pages: string; type: string } => {
+    const specialistDraft = buildDomainTaskDraft(goalName, i, totalDays);
+    if (specialistDraft) return specialistDraft;
+
     const progress = i / totalDays;
     const dayNum = i + 1;
 
@@ -227,15 +277,18 @@ export function generateDefaultTasks(
 
   const start = todayStr();
   for (let i = 0; i < totalDays; i++) {
-    const { task, pages, type } = getTask(i);
-    tasks.push({
+    const progress = i / totalDays;
+    const draft = getTask(i);
+    const dayTask: DayTask = {
       day: i + 1,
       date: addDays(start, i),
-      task,
-      pages,
-      type,
+      task: draft.task,
+      pages: draft.pages,
+      type: draft.type,
       completed: false,
-    });
+      ...makeVariants(draft.task, draft.pages, progress),
+    };
+    tasks.push(enrichTaskWithDomainContext(goalName, dayTask, i, totalDays, profile, analysis));
   }
   return tasks;
 }

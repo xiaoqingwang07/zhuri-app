@@ -12,6 +12,8 @@ const NOTIFICATIONS_SUPPORTED = Platform.OS !== "web";
 const REMINDER_HOUR_KEY = "reminder_hour";
 const REMINDER_ENABLED_KEY = "reminder_enabled";
 export const DEFAULT_REMINDER_HOUR = 21;
+const TODAY_NUDGE_OFFSETS_MIN = [0, 70, 150, 240];
+const FUTURE_WINDOW_DAYS = 7;
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -48,9 +50,14 @@ export async function ensureNotificationPermission(): Promise<boolean> {
 }
 
 /**
- * 滑动窗口式提醒：为未来 7 天各安排一条提醒。
+ * 滑动窗口式提醒：
+ * - 今天未完成时，安排一组递进提醒，直到用户完成任务后重新调度并取消。
+ * - 未来 7 天各安排一条提醒，保证用户不打开 App 也会被拉回来。
  * 优先使用已缓存的 AI 督促文案（今日页会按天生成并缓存），否则用人格兜底文案。
  * 每次打开 App / 打卡 / 改设置时重新调度，窗口自动前移。
+ *
+ * iOS 不允许 App 禁止用户手动清除通知；这里通过“未完成前多次提醒，完成后停止”
+ * 来实现接近的绑定效果。
  */
 export async function rescheduleReminders(
   persona: PersonaId,
@@ -69,27 +76,58 @@ export async function rescheduleReminders(
   const hour = getReminderHour();
   const today = todayStr();
   const now = new Date();
-  const primary = activeGoals[0];
+  const unfinishedToday = activeGoals
+    .map((goal) => {
+      const idx = todayTaskIndex(goal);
+      return { goal, idx, task: idx === -1 ? null : goal.tasks[idx] };
+    })
+    .filter((item) => item.task && !item.task.completed);
+  const primary = unfinishedToday[0]?.goal || activeGoals[0];
 
-  for (let i = 0; i < 7; i++) {
+  const notificationBody = (dateStr: string) => {
+    const cachedAI = kvGet(`coach_${primary.id}_${dateStr}_${persona}`);
+    const base = cachedAI || fallbackCoachMessage(persona, primary.name);
+    const extra =
+      unfinishedToday.length > 1
+        ? ` 还有 ${unfinishedToday.length} 个目标没收尾。`
+        : "";
+    return `${base}${extra}`;
+  };
+
+  if (unfinishedToday.length > 0) {
+    const firstFire = new Date();
+    firstFire.setHours(hour, 0, 0, 0);
+    const baseTime =
+      firstFire.getTime() > now.getTime()
+        ? firstFire.getTime()
+        : now.getTime() + 5 * 60 * 1000;
+
+    for (const offset of TODAY_NUDGE_OFFSETS_MIN) {
+      const fireDate = new Date(baseTime + offset * 60 * 1000);
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: offset === 0 ? "逐日 · 今天还没接住" : "逐日 · 别让今天断掉",
+          body: notificationBody(today),
+          sound: true,
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: fireDate,
+        },
+      });
+    }
+  }
+
+  for (let i = 1; i < FUTURE_WINDOW_DAYS; i++) {
     const dateStr = addDays(today, i);
     const fireDate = parseDate(dateStr);
     fireDate.setHours(hour, 0, 0, 0);
     if (fireDate.getTime() <= now.getTime()) continue;
 
-    // 今天已打卡就不用再提醒今天
-    if (i === 0) {
-      const idx = todayTaskIndex(primary);
-      if (idx === -1 || primary.tasks[idx]?.completed) continue;
-    }
-
-    const cachedAI = kvGet(`coach_${primary.id}_${dateStr}_${persona}`);
-    const body = cachedAI || fallbackCoachMessage(persona, primary.name);
-
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: "逐日 · 今日任务待完成",
-        body,
+        title: "逐日 · 明天也别断",
+        body: notificationBody(dateStr),
         sound: true,
       },
       trigger: {

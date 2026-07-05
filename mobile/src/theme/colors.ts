@@ -1,4 +1,4 @@
-export const BRAND = "#FF6B35";
+export const BRAND = "#F25F3A";
 
 export interface ThemeColors {
   background: string;
@@ -20,48 +20,48 @@ export interface ThemeColors {
 }
 
 export const lightColors: ThemeColors = {
-  background: "#F7F7F9",
+  background: "#F7F4EF",
   card: "#FFFFFF",
-  cardElevated: "#FFFFFF",
-  text: "#1A1A1E",
-  textSecondary: "#6B6B72",
-  textTertiary: "#9C9CA3",
-  border: "#ECECEF",
+  cardElevated: "#FFFCF8",
+  text: "#151316",
+  textSecondary: "#66606A",
+  textTertiary: "#9A929B",
+  border: "#E8E0D8",
   primary: BRAND,
-  primarySoft: "#FFF0E9",
-  success: "#34C759",
-  successSoft: "#E8F9ED",
-  danger: "#FF3B30",
-  dangerSoft: "#FFECEB",
-  warning: "#FF9500",
-  warningSoft: "#FFF4E5",
+  primarySoft: "#FFE8DF",
+  success: "#0E9F75",
+  successSoft: "#E4F7EF",
+  danger: "#E5486D",
+  dangerSoft: "#FFE9EF",
+  warning: "#D99400",
+  warningSoft: "#FFF1CC",
   overlay: "rgba(0,0,0,0.4)",
 };
 
 export const darkColors: ThemeColors = {
-  background: "#000000",
-  card: "#1C1C1E",
-  cardElevated: "#2C2C2E",
-  text: "#F5F5F7",
-  textSecondary: "#A1A1A8",
-  textTertiary: "#6E6E76",
-  border: "#2C2C2E",
+  background: "#11100F",
+  card: "#1B1918",
+  cardElevated: "#24211F",
+  text: "#FAF4ED",
+  textSecondary: "#BDB2A9",
+  textTertiary: "#817770",
+  border: "#302B27",
   primary: BRAND,
-  primarySoft: "#3A2318",
-  success: "#30D158",
-  successSoft: "#12301C",
-  danger: "#FF453A",
-  dangerSoft: "#3A1715",
-  warning: "#FF9F0A",
-  warningSoft: "#382A10",
+  primarySoft: "#3A211A",
+  success: "#23C899",
+  successSoft: "#12352C",
+  danger: "#FF6686",
+  dangerSoft: "#391821",
+  warning: "#F4B63C",
+  warningSoft: "#342810",
   overlay: "rgba(0,0,0,0.6)",
 };
 
 export const radius = {
-  sm: 10,
-  md: 16,
-  lg: 22,
-  xl: 28,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 22,
   full: 999,
 };
 

@@ -15,12 +15,39 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Certificate } from "@/components/Certificate";
 import { Confetti } from "@/components/Confetti";
 import { Button, Card, PressableScale, ProgressBar, SectionTitle } from "@/components/ui";
+import { RescueMode } from "@/lib/ai";
 import { isProCached } from "@/lib/entitlements";
 import { useGoals } from "@/lib/GoalsContext";
 import { todayStr } from "@/lib/dates";
 import { completionRate, missedDays } from "@/lib/store";
 import { radius, spacing } from "@/theme/colors";
 import { useTheme } from "@/theme/useTheme";
+
+const RESCUE_PLANS: {
+  id: RescueMode;
+  emoji: string;
+  title: string;
+  desc: string;
+}[] = [
+  {
+    id: "relaxed",
+    emoji: "🌿",
+    title: "轻松追回",
+    desc: "延长一点周期，把前几天调轻，先找回手感。",
+  },
+  {
+    id: "steady",
+    emoji: "🎯",
+    title: "稳定追回",
+    desc: "保持大致节奏，合并低价值任务，从今天重新接上。",
+  },
+  {
+    id: "sprint",
+    emoji: "⚡️",
+    title: "冲刺追回",
+    desc: "压缩一部分任务，适合截止日不能动的时候。",
+  },
+];
 
 export default function GoalDetailScreen() {
   const { colors } = useTheme();
@@ -38,22 +65,11 @@ export default function GoalDetailScreen() {
   const missed = goal ? missedDays(goal) : 0;
   const today = todayStr();
 
-  const handleAdjust = async () => {
+  const handleAdjust = async (mode: RescueMode = "steady") => {
     if (!goal) return;
-    if (!isProCached()) {
-      Alert.alert(
-        "AI 动态调整是 Pro 功能",
-        "落后了不用推倒重来，AI 帮你把剩余任务重新编排，轻装上阵。",
-        [
-          { text: "取消", style: "cancel" },
-          { text: "了解 Pro", onPress: () => router.push("/paywall") },
-        ]
-      );
-      return;
-    }
     setAdjusting(true);
     try {
-      const message = await adjustPlan(goal.id);
+      const message = await adjustPlan(goal.id, mode);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert("✨ 计划已重排", message);
     } catch {
@@ -72,11 +88,10 @@ export default function GoalDetailScreen() {
         "让 AI 把剩余任务重新编排到从今天开始的日程里？已完成的进度会保留。",
         [
           { text: "先不用", style: "cancel" },
-          { text: "让 AI 重排", onPress: handleAdjust },
+          { text: "看救援方案", onPress: () => {} },
         ]
       );
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [action, goal, missed]);
 
   const handleRevive = () => {
@@ -84,11 +99,7 @@ export default function GoalDetailScreen() {
     if (goal.reviveCards <= 0) {
       Alert.alert(
         "复活卡不足",
-        "复活卡可以补救错过的一天，保住连续记录。",
-        [
-          { text: "取消", style: "cancel" },
-          { text: "获取复活卡", onPress: () => router.push("/paywall?tab=revive") },
-        ]
+        "先用 AI 救援重排剩余计划，把节奏接回来。连续完成一段时间后会获得新的复活卡。"
       );
       return;
     }
@@ -183,6 +194,29 @@ export default function GoalDetailScreen() {
           </View>
         </Card>
 
+        {goal.analysis && (
+          <Card style={styles.analysisCard}>
+            <View style={styles.analysisHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.analysisKicker, { color: colors.primary }]}>陪练诊断</Text>
+                <Text style={[styles.analysisTitle, { color: colors.text }]}>
+                  {goal.analysis.domain} · {goal.analysis.subject}
+                </Text>
+              </View>
+              <Ionicons name="sparkles" size={22} color={colors.primary} />
+            </View>
+            <Text style={[styles.analysisBody, { color: colors.textSecondary }]}>
+              {goal.analysis.expertiseAngle}
+            </Text>
+            <View style={[styles.strategyBox, { backgroundColor: colors.background }]}>
+              <Text style={[styles.strategyLabel, { color: colors.textTertiary }]}>策略</Text>
+              <Text style={[styles.strategyText, { color: colors.text }]}>
+                {goal.analysis.coachStrategy}
+              </Text>
+            </View>
+          </Card>
+        )}
+
         {/* 已完成目标 → 证书 */}
         {goal.status === "completed" && (
           <Card style={{ alignItems: "center", gap: spacing.md }}>
@@ -195,26 +229,56 @@ export default function GoalDetailScreen() {
           </Card>
         )}
 
-        {/* 落后处理 */}
+        {/* 落后救援 */}
         {missed > 0 && goal.status === "active" && (
-          <Card style={{ gap: spacing.sm, backgroundColor: colors.warningSoft }}>
+          <Card style={{ gap: spacing.md, backgroundColor: colors.warningSoft }}>
             <Text style={[styles.missedTitle, { color: colors.text }]}>
-              ⚡️ 落后 {missed} 天
+              你只是掉队了 {missed} 天，还能接回来
             </Text>
             <Text style={[styles.missedDesc, { color: colors.textSecondary }]}>
-              别灰心，两种方式帮你回到正轨：
+              别急着重开目标。选一个救援节奏，AI 会保留已完成进度，把剩余任务重新排到从今天开始。
             </Text>
+
+            <View style={{ gap: spacing.sm }}>
+              {RESCUE_PLANS.map((plan) => (
+                <PressableScale
+                  key={plan.id}
+                  disabled={adjusting}
+                  onPress={() => handleAdjust(plan.id)}
+                  style={[
+                    styles.rescuePlan,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
+                      opacity: adjusting ? 0.6 : 1,
+                    },
+                  ]}
+                >
+                  <Text style={{ fontSize: 24 }}>{plan.emoji}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.rescuePlanTitle, { color: colors.text }]}>
+                      {plan.title}
+                    </Text>
+                    <Text style={[styles.rescuePlanDesc, { color: colors.textSecondary }]}>
+                      {plan.desc}
+                    </Text>
+                  </View>
+                  {adjusting ? (
+                    <Text style={[styles.rescuePlanAction, { color: colors.textTertiary }]}>
+                      生成中
+                    </Text>
+                  ) : (
+                    <Ionicons name="arrow-forward-circle" size={24} color={colors.warning} />
+                  )}
+                </PressableScale>
+              ))}
+            </View>
+
             <View style={{ flexDirection: "row", gap: spacing.sm }}>
               <Button
-                title={`复活卡补救 (${goal.reviveCards})`}
+                title={`用复活卡补一天 (${goal.reviveCards})`}
                 variant="secondary"
                 onPress={handleRevive}
-                style={{ flex: 1 }}
-              />
-              <Button
-                title="AI 重排计划"
-                onPress={handleAdjust}
-                loading={adjusting}
                 style={{ flex: 1 }}
               />
             </View>
@@ -347,12 +411,71 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     marginTop: spacing.xs,
   },
+  analysisCard: {
+    gap: spacing.md,
+  },
+  analysisHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+  },
+  analysisKicker: {
+    fontSize: 12,
+    fontWeight: "900",
+    marginBottom: 4,
+  },
+  analysisTitle: {
+    fontSize: 17,
+    lineHeight: 23,
+    fontWeight: "900",
+  },
+  analysisBody: {
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  strategyBox: {
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    gap: 4,
+  },
+  strategyLabel: {
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  strategyText: {
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "700",
+  },
   missedTitle: {
     fontSize: 16,
     fontWeight: "800",
   },
   missedDesc: {
     fontSize: 13,
+    lineHeight: 19,
+  },
+  rescuePlan: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    padding: spacing.md,
+  },
+  rescuePlanTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  rescuePlanDesc: {
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 2,
+  },
+  rescuePlanAction: {
+    fontSize: 12,
+    fontWeight: "800",
   },
   badgeGrid: {
     flexDirection: "row",
