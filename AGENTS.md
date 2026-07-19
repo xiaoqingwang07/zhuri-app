@@ -24,16 +24,26 @@ repo root and in `mobile/`, so dependencies are present on startup.
 
 ### Non-obvious gotchas
 
-- **AI requires a MiniMax key.** The Worker's AI endpoints need the `API_KEY` secret (a
-  MiniMax "Token Plan" key, `sk-cp-` prefix). Without it, `POST /` returns
-  `{"error":"API Key not configured"}` (HTTP 500). Set it with `npx wrangler secret put API_KEY`
-  (deploy) or a local `worker/.dev.vars` file (`API_KEY=...`) for `wrangler dev`.
-- **Web app calls the hardcoded production Worker** (`WORKER_URL` in `lib/ai.ts`), whose key is
-  currently unauthorized (returns 401). So the goal-creation UI shows the "AI 生成失败了"
-  error screen and does **not** auto-fall-back to default tasks in the UI. To exercise the core
-  loop without AI, either provide a MiniMax key via `localStorage.zhuri_custom_api_key`, or seed
-  a goal directly into `localStorage` under key `zhuri_goals` (shape = `Goal[]` from
-  `lib/types.ts`) and reload.
+- **AI backend + auth token.** The web app (`lib/ai.ts`) and mobile app call the Worker with an
+  `x-app-token` header that must match `APP_TOKEN` in `worker/wrangler.toml` (currently committed as
+  `zhuri_app_token_2026_v1_m3x9k2`). Calling the Worker **without** that header returns
+  `{"error":"Unauthorized","code":"bad_token"}` (HTTP 401) — this is expected, not a broken key.
+  The live production Worker (`WORKER_URL` in `lib/ai.ts`) is deployed with a valid `API_KEY`, so
+  the web UI's "AI 目标拆解" flow works out of the box.
+- **AI generation is intermittently flaky (pre-existing bug).** MiniMax-M3 sometimes wraps its JSON
+  in `<think>`/markdown fences that the Worker's `extractJSON()` can't parse, yielding
+  `POST / 500` `{"error":"Failed to parse AI response"}` and the UI's "AI 生成失败了" screen.
+  Retrying usually succeeds. This is a Worker code issue, not an env/key problem.
+- **Running the Worker locally with AI.** The AI endpoints need `API_KEY` (a MiniMax "Token Plan"
+  key, `sk-cp-` prefix); without it `POST /` returns `{"error":"API Key not configured"}` (500).
+  If `API_KEY` is available as a Cursor Secret / env var, wire it into a **gitignored**
+  `worker/.dev.vars` before `wrangler dev`: `printf 'API_KEY=%s\n' "$API_KEY" > worker/.dev.vars`.
+  For deploy use `npx wrangler secret put API_KEY`. Endpoints are rate-limited per `x-device-id`
+  (free tier ~10/day), so vary the id when probing.
+- **No UI fallback when AI fails.** When AI fails, the `isFallback` render path shows the error
+  screen and does **not** surface default tasks. To exercise the core loop (dashboard + 打卡)
+  without AI, seed a goal directly into `localStorage.zhuri_goals` (shape = `Goal[]` from
+  `lib/types.ts`) and reload, or set a personal key in `localStorage.zhuri_custom_api_key`.
 - **Onboarding gate:** the web app shows an onboarding flow until `localStorage.zhuri_onboarding`
   is set (and a cloud banner until `localStorage.zhuri_cloud_banner_seen`).
 - Worker deploy is `npx wrangler deploy` from `worker/`; it needs Cloudflare auth + the KV
