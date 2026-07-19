@@ -60,6 +60,8 @@ export default function GoalDetailScreen() {
   const [adjusting, setAdjusting] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const certificateRef = useRef<View>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const rescueSectionY = useRef(0);
   const autoAdjustPrompted = useRef(false);
 
   const missed = goal ? missedDays(goal) : 0;
@@ -88,7 +90,15 @@ export default function GoalDetailScreen() {
         "让 AI 把剩余任务重新编排到从今天开始的日程里？已完成的进度会保留。",
         [
           { text: "先不用", style: "cancel" },
-          { text: "看救援方案", onPress: () => {} },
+          {
+            text: "看救援方案",
+            onPress: () => {
+              scrollRef.current?.scrollTo({
+                y: Math.max(0, rescueSectionY.current - 24),
+                animated: true,
+              });
+            },
+          },
         ]
       );
     }
@@ -159,6 +169,7 @@ export default function GoalDetailScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={{
           paddingTop: insets.top + spacing.sm,
           paddingHorizontal: spacing.md,
@@ -231,7 +242,12 @@ export default function GoalDetailScreen() {
 
         {/* 落后救援 */}
         {missed > 0 && goal.status === "active" && (
-          <Card style={{ gap: spacing.md, backgroundColor: colors.warningSoft }}>
+          <Card
+            style={{ gap: spacing.md, backgroundColor: colors.warningSoft }}
+            onLayout={(e) => {
+              rescueSectionY.current = e.nativeEvent.layout.y;
+            }}
+          >
             <Text style={[styles.missedTitle, { color: colors.text }]}>
               你只是掉队了 {missed} 天，还能接回来
             </Text>

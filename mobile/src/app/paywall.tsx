@@ -30,8 +30,8 @@ const FREE_FEATURES = [
 
 const PRO_FEATURES = [
   { emoji: "🎯", title: "12 个目标并行", desc: "学习、运动、创作、考试一起推进，不用频繁删目标" },
-  { emoji: "📸", title: "证明档案", desc: "用照片/截图/文字沉淀每次执行证据，形成可信成长记录" },
-  { emoji: "📊", title: "深度复盘", desc: "分析你最容易断在哪、哪类任务最吃力，并给出下一步调整" },
+  { emoji: "⚡️", title: "更高 AI 额度", desc: "每日可用更多次拆解、救援重排与督促文案生成" },
+  { emoji: "🏅", title: "证书去水印", desc: "成就证书分享时去掉推广水印，更适合认真晒成果" },
 ];
 
 export default function PaywallScreen() {
@@ -61,7 +61,7 @@ export default function PaywallScreen() {
       const isPro = await purchasePackage(selected);
       if (isPro) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert("🎉 逐日 Plus 已开通", "高阶执行记录和分享能力已解锁。", [
+        Alert.alert("逐日 Plus 已开通", "多目标、更高 AI 额度和证书去水印已解锁。", [
           { text: "开始使用", onPress: () => router.dismiss() },
         ]);
       }
@@ -101,7 +101,7 @@ export default function PaywallScreen() {
           <Text style={{ fontSize: 48 }}>🚀</Text>
           <Text style={[styles.title, { color: colors.text }]}>逐日 Plus</Text>
           <Text style={{ fontSize: 14, color: colors.textSecondary, textAlign: "center", lineHeight: 20 }}>
-            免费版负责陪你开始，Plus 负责把执行记录做深、做真、做成资产
+            免费版负责陪你开始；Plus 解锁更多并行目标、更高 AI 额度与证书去水印
           </Text>
         </View>
 
@@ -118,7 +118,7 @@ export default function PaywallScreen() {
         </Card>
 
         <Card style={{ gap: spacing.md }}>
-          <Text style={[styles.blockTitle, { color: colors.text }]}>Plus 解锁高阶执行系统</Text>
+          <Text style={[styles.blockTitle, { color: colors.text }]}>Plus 已交付能力</Text>
           {PRO_FEATURES.map((f) => (
             <View key={f.title} style={styles.featureRow}>
               <Text style={{ fontSize: 24 }}>{f.emoji}</Text>

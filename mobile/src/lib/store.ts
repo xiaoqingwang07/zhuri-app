@@ -36,20 +36,19 @@ export function createInitialGoal(
   };
 }
 
-/** 从最后一个已完成任务向前数连续完成天数 */
+/** 按日历日计算连续打卡：从今天（若今日未完成则从昨天）往回数 */
 function calcStreak(tasks: DayTask[]): number {
-  let lastCompleted = -1;
-  for (let i = tasks.length - 1; i >= 0; i--) {
-    if (tasks[i].completed) {
-      lastCompleted = i;
-      break;
-    }
-  }
-  if (lastCompleted === -1) return 0;
+  const completedDates = new Set(
+    tasks.filter((t) => t.completed).map((t) => t.date)
+  );
+  if (completedDates.size === 0) return 0;
+
+  const today = todayStr();
+  let cursor = completedDates.has(today) ? today : addDays(today, -1);
   let streak = 0;
-  for (let i = lastCompleted; i >= 0; i--) {
-    if (tasks[i].completed) streak++;
-    else break;
+  while (completedDates.has(cursor)) {
+    streak++;
+    cursor = addDays(cursor, -1);
   }
   return streak;
 }
@@ -155,13 +154,15 @@ export function useReviveCard(goal: Goal): Goal | null {
   };
 }
 
-/** 找出今天应该做的任务索引（今天的任务，如果没有则第一个未完成的） */
+/** 严格匹配「今天」日期的任务；没有则返回 -1（勿与补作业混淆） */
 export function todayTaskIndex(goal: Goal): number {
   const today = todayStr();
-  const exact = goal.tasks.findIndex((t) => t.date === today);
-  if (exact !== -1) return exact;
-  const firstIncomplete = goal.tasks.findIndex((t) => !t.completed);
-  return firstIncomplete;
+  return goal.tasks.findIndex((t) => t.date === today);
+}
+
+/** 最早一个未完成任务（用于补作业 / 无今日槽位时） */
+export function nextIncompleteTaskIndex(goal: Goal): number {
+  return goal.tasks.findIndex((t) => !t.completed);
 }
 
 /** 错过的天数（日期已过但未完成） */

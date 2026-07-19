@@ -29,7 +29,12 @@ import { rescheduleReminders } from "@/lib/notifications";
 import { isProCached, maxGoals } from "@/lib/entitlements";
 import { useGoals } from "@/lib/GoalsContext";
 import { formatChineseDate, todayStr, weekdayName } from "@/lib/dates";
-import { completionRate, missedDays, todayTaskIndex } from "@/lib/store";
+import {
+  completionRate,
+  missedDays,
+  nextIncompleteTaskIndex,
+  todayTaskIndex,
+} from "@/lib/store";
 import { Badge, CheckInFeedback, Goal, PERSONAS } from "@/lib/types";
 import { radius, spacing } from "@/theme/colors";
 import { useTheme } from "@/theme/useTheme";
@@ -217,7 +222,18 @@ export default function TodayScreen() {
   const handleAddGoal = useCallback(() => {
     const limit = maxGoals(isProCached());
     if (activeGoals.length >= limit) {
-      Alert.alert("目标数量已达上限", `最多同时进行 ${limit} 个目标，先完成一个再来吧。`);
+      Alert.alert(
+        "目标数量已达上限",
+        isProCached()
+          ? `最多同时进行 ${limit} 个目标，先完成一个再来吧。`
+          : `免费版最多 ${limit} 个并行目标。升级 Plus 可同时进行更多目标。`,
+        isProCached()
+          ? [{ text: "知道了" }]
+          : [
+              { text: "取消", style: "cancel" },
+              { text: "了解 Plus", onPress: () => router.push("/paywall") },
+            ]
+      );
       return;
     }
     router.push("/create");
@@ -227,14 +243,20 @@ export default function TodayScreen() {
     return <Redirect href="/onboarding" />;
   }
 
-  const primaryIdx = primaryGoal ? todayTaskIndex(primaryGoal) : -1;
+  const primaryTodayIdx = primaryGoal ? todayTaskIndex(primaryGoal) : -1;
+  const primaryCatchUpIdx =
+    primaryGoal && primaryTodayIdx === -1 ? nextIncompleteTaskIndex(primaryGoal) : -1;
+  const primaryIdx = primaryTodayIdx !== -1 ? primaryTodayIdx : primaryCatchUpIdx;
+  const isCatchUpDay = primaryTodayIdx === -1 && primaryCatchUpIdx !== -1;
   const primaryTask = primaryGoal && primaryIdx !== -1 ? primaryGoal.tasks[primaryIdx] : null;
   const primaryMissed = primaryGoal ? missedDays(primaryGoal) : 0;
   const primaryRate = primaryGoal ? completionRate(primaryGoal) : 0;
-  const doneToday = primaryTask?.completed ?? false;
+  const doneToday = primaryTodayIdx !== -1 ? !!primaryGoal?.tasks[primaryTodayIdx]?.completed : false;
   const unfinishedGoals = activeGoals.filter((g) => {
-    const idx = todayTaskIndex(g);
-    return idx !== -1 && !g.tasks[idx].completed;
+    const todayIdx = todayTaskIndex(g);
+    if (todayIdx !== -1) return !g.tasks[todayIdx].completed;
+    const catchUp = nextIncompleteTaskIndex(g);
+    return catchUp !== -1 && g.tasks[catchUp].date <= today;
   });
 
   return (
@@ -347,7 +369,7 @@ export default function TodayScreen() {
               <View style={[styles.taskPanel, { backgroundColor: colors.background }]}>
                 <View style={styles.panelHeader}>
                   <Text style={[styles.panelLabel, { color: colors.textTertiary }]}>
-                    今日主任务
+                    {isCatchUpDay ? "补作业任务" : "今日主任务"}
                   </Text>
                   <Text style={[styles.durationTag, { color: colors.primary, backgroundColor: colors.primarySoft }]}>
                     {primaryTask.durationMinutes || primaryGoal.profile?.dailyMinutes || 30} 分钟

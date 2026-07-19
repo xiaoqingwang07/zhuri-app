@@ -154,6 +154,14 @@ export default function CreateGoalScreen() {
       return;
     }
 
+    if (!isProCached() && remainingAIQuota(false) <= 0) {
+      Alert.alert("本月 AI 次数已用完", "可以等下月恢复，或了解逐日 Plus 获取更高额度。", [
+        { text: "知道了", style: "cancel" },
+        { text: "了解 Plus", onPress: () => router.push("/paywall") },
+      ]);
+      return;
+    }
+
     const feasibility = evaluateGoalFeasibility(goal, days, profile);
     if (feasibility.level === "unrealistic") {
       Alert.alert(
@@ -203,7 +211,7 @@ export default function CreateGoalScreen() {
     setStep("loading");
     try {
       const result = await generateTasksWithFallback(goal, days, profile);
-      if (result.usedAI && remainingAIQuota(isProCached()) > 0) consumeAIQuota();
+      if (result.usedAI) consumeAIQuota();
       setTasks(result.tasks);
       setGoalAnalysis(result.analysis);
       setUsedAI(result.usedAI);
@@ -212,7 +220,7 @@ export default function CreateGoalScreen() {
     } finally {
       generatingRef.current = false;
     }
-  }, [goalText, days, profile, acceptedStretchGoal]);
+  }, [goalText, days, profile, acceptedStretchGoal, router]);
 
   const confirm = useCallback(() => {
     addGoal(goalText.trim(), days, tasks, profile, goalAnalysis || undefined);

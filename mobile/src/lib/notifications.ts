@@ -4,7 +4,7 @@ import { fallbackCoachMessage } from "./ai";
 import { kvGet, kvSet } from "./db";
 import { addDays, parseDate, todayStr } from "./dates";
 import { Goal, PersonaId } from "./types";
-import { todayTaskIndex } from "./store";
+import { nextIncompleteTaskIndex, todayTaskIndex } from "./store";
 
 /** 本地通知调度是纯原生能力，Web 平台（含 Expo Go 网页预览）没有对应实现 */
 const NOTIFICATIONS_SUPPORTED = Platform.OS !== "web";
@@ -78,8 +78,16 @@ export async function rescheduleReminders(
   const now = new Date();
   const unfinishedToday = activeGoals
     .map((goal) => {
-      const idx = todayTaskIndex(goal);
-      return { goal, idx, task: idx === -1 ? null : goal.tasks[idx] };
+      const todayIdx = todayTaskIndex(goal);
+      if (todayIdx !== -1) {
+        return { goal, idx: todayIdx, task: goal.tasks[todayIdx] };
+      }
+      const catchUp = nextIncompleteTaskIndex(goal);
+      if (catchUp === -1) return { goal, idx: -1, task: null };
+      const task = goal.tasks[catchUp];
+      // 只有日期已到/已过的未完成任务才继续提醒
+      if (task.date > today) return { goal, idx: -1, task: null };
+      return { goal, idx: catchUp, task };
     })
     .filter((item) => item.task && !item.task.completed);
   const primary = unfinishedToday[0]?.goal || activeGoals[0];

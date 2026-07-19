@@ -1,11 +1,11 @@
 import * as Crypto from "expo-crypto";
+import { APP_TOKEN, WORKER_URL } from "./config";
 import { kvGet, kvSet } from "./db";
 import { addDays, todayStr } from "./dates";
 import { buildFallbackGoalAnalysis, enrichTaskWithDomainContext } from "./domainCoach";
 import { DEFAULT_GOAL_PROFILE, DayTask, Goal, GoalAnalysis, GoalProfile, PersonaId } from "./types";
 import { generateDefaultTasks, missedDays } from "./store";
 
-const WORKER_URL = "https://zhuri-ai-proxy.xiaoqingwang07.workers.dev";
 const DEVICE_ID_KEY = "device_id";
 // MiniMax-M3 生成多天计划通常需要 15–30 秒，隧道模式下更慢，超时要留足余量
 const TIMEOUT_MS = 60000;
@@ -28,12 +28,19 @@ async function callWorker<T>(path: string, body: unknown): Promise<T> {
       headers: {
         "Content-Type": "application/json",
         "x-device-id": getDeviceId(),
+        "x-app-token": APP_TOKEN,
       },
       body: JSON.stringify(body),
       signal: controller.signal,
     });
     if (!response.ok) {
       const text = await response.text().catch(() => "");
+      if (response.status === 429) {
+        throw new Error("今日 AI 次数已达上限，明天再来或升级 Plus");
+      }
+      if (response.status === 401) {
+        throw new Error("AI 服务鉴权失败，请更新应用后重试");
+      }
       throw new Error(`AI 服务出错 (${response.status}): ${text.slice(0, 200)}`);
     }
     return (await response.json()) as T;
@@ -169,6 +176,18 @@ export async function adjustPlanWithAI(
   const compression = mode === "sprint" ? Math.min(3, Math.max(1, missed)) : 0;
   const remainingDays = Math.max(1, remaining.length + extension - compression);
 
+  const recentFeedback = completed
+    .filter((t) => t.feedbackDifficulty || t.blocker || t.adjustmentPreference)
+    .slice(-5)
+    .map((t) => ({
+      day: t.day,
+      difficulty: t.feedbackDifficulty,
+      actualMinutes: t.actualMinutes,
+      blocker: t.blocker,
+      preference: t.adjustmentPreference,
+      task: t.task,
+    }));
+
   const data = await callWorker<any>("/adjust", {
     goal: goal.name,
     totalDays: goal.totalDays,
@@ -176,8 +195,15 @@ export async function adjustPlanWithAI(
     rescueMode: mode,
     missedCount: missed,
     completedCount: completed.length,
-    remainingTasks: remaining.map((t) => ({ task: t.task, pages: t.pages, type: t.type })),
+    remainingTasks: remaining.map((t) => ({
+      task: t.task,
+      pages: t.pages,
+      type: t.type,
+      difficulty: t.difficulty,
+      durationMinutes: t.durationMinutes,
+    })),
     remainingDays,
+    recentFeedback,
   });
 
   const rawTasks = parseTaskArray(data);

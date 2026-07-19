@@ -6,6 +6,10 @@ compatibility_date = "2024-01-01"
 binding = "ZHURI_DB"
 id = "12af34f768a143388e7169bf68729945"
 
+# 与 mobile/src/lib/config.ts 的 APP_TOKEN 保持一致
+[vars]
+APP_TOKEN = "zhuri_app_token_2026_v1_m3x9k2"
+
 # Secrets（不要写在这里，用命令设置）：
 #   npx wrangler secret put API_KEY      # MiniMax Token Plan Key（sk-cp- 前缀，必需）
 #   npx wrangler secret put RC_API_KEY   # RevenueCat secret key（可选，启用订阅校验）

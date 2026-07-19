@@ -5,14 +5,24 @@ import React, { useCallback, useState } from "react";
 import {
   Alert,
   Linking,
+  Modal,
   ScrollView,
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Card, Chip, PressableScale, SectionTitle } from "@/components/ui";
+import { Button, Card, Chip, PressableScale, SectionTitle } from "@/components/ui";
+import {
+  clearCloudBackup,
+  exportBackupShare,
+  parseBackupText,
+  applyBackupPayload,
+  restoreBackupFromCloud,
+  syncBackupToCloud,
+} from "@/lib/backup";
 import { isProCached } from "@/lib/entitlements";
 import { restorePurchases } from "@/lib/purchases";
 import { useGoals } from "@/lib/GoalsContext";
@@ -40,6 +50,9 @@ export default function SettingsScreen() {
   const [reminderOn, setReminderOn] = useState(isReminderEnabled());
   const [hour, setHour] = useState(getReminderHour());
   const [restoring, setRestoring] = useState(false);
+  const [busyBackup, setBusyBackup] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState("");
   const pro = isProCached();
 
   const handleToggleReminder = useCallback(
@@ -95,6 +108,32 @@ export default function SettingsScreen() {
     }
   }, []);
 
+  const runBackup = useCallback(async (action: () => Promise<string | void>) => {
+    setBusyBackup(true);
+    try {
+      const ok = await action();
+      if (ok) Alert.alert("完成", ok);
+    } catch (e: any) {
+      if (e?.message !== "已取消导出") {
+        Alert.alert("操作失败", e?.message || "请稍后再试");
+      }
+    } finally {
+      setBusyBackup(false);
+    }
+  }, []);
+
+  const handleImportPaste = useCallback(() => {
+    try {
+      const payload = parseBackupText(importText.trim());
+      const result = applyBackupPayload(payload);
+      setImportOpen(false);
+      setImportText("");
+      Alert.alert("导入成功", `已恢复 ${result.goals} 个目标。请完全退出 App 后重新打开以刷新界面。`);
+    } catch (e: any) {
+      Alert.alert("导入失败", e?.message || "JSON 无效");
+    }
+  }, [importText]);
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
@@ -124,8 +163,8 @@ export default function SettingsScreen() {
             </Text>
             <Text style={{ fontSize: 13, color: colors.textSecondary }}>
               {pro
-                ? "多目标、证明档案和深度复盘已解锁"
-                : "核心功能免费，Plus 解锁证明上传、多目标和深度复盘"}
+                ? "多目标、更高 AI 额度和证书去水印已解锁"
+                : "核心功能免费，Plus 解锁多目标、更高 AI 额度与证书去水印"}
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
@@ -205,6 +244,65 @@ export default function SettingsScreen() {
         </Card>
       </View>
 
+      {/* 备份 */}
+      <View>
+        <SectionTitle>数据备份</SectionTitle>
+        <Card style={{ paddingVertical: 4 }}>
+          <SettingsRow
+            label="导出备份（分享 JSON）"
+            loading={busyBackup}
+            onPress={() =>
+              runBackup(async () => {
+                await exportBackupShare();
+                return "已打开系统分享，请保存到文件或备忘录。";
+              })
+            }
+          />
+          <SettingsRow
+            label="从 JSON 文本导入"
+            onPress={() => setImportOpen(true)}
+          />
+          <SettingsRow
+            label="上传到云端备份"
+            loading={busyBackup}
+            onPress={() =>
+              runBackup(async () => {
+                await syncBackupToCloud();
+                return "已上传到云端（绑定本机匿名设备 ID）。";
+              })
+            }
+          />
+          <SettingsRow
+            label="从云端恢复"
+            loading={busyBackup}
+            onPress={() =>
+              runBackup(async () => {
+                const result = await restoreBackupFromCloud();
+                return `已恢复 ${result.goals} 个目标。请完全退出 App 后重新打开以刷新界面。`;
+              })
+            }
+          />
+          <SettingsRow
+            label="清除云端备份"
+            loading={busyBackup}
+            onPress={() => {
+              Alert.alert("清除云端备份？", "仅清除服务器上的备份，不影响本机数据。", [
+                { text: "取消", style: "cancel" },
+                {
+                  text: "清除",
+                  style: "destructive",
+                  onPress: () =>
+                    runBackup(async () => {
+                      await clearCloudBackup();
+                      return "云端备份已清除。";
+                    }),
+                },
+              ]);
+            }}
+          />
+        </Card>
+      </View>
+
       {/* 其他 */}
       <View>
         <SectionTitle>其他</SectionTitle>
@@ -221,6 +319,29 @@ export default function SettingsScreen() {
           逐日 v1.0.0 · AI 教练陪你达成目标
         </Text>
       </View>
+
+      <Modal visible={importOpen} transparent animationType="fade">
+        <View style={[styles.importBackdrop, { backgroundColor: "rgba(0,0,0,0.45)" }]}>
+          <View style={[styles.importCard, { backgroundColor: colors.card }]}>
+            <Text style={[styles.proTitle, { color: colors.text }]}>粘贴备份 JSON</Text>
+            <TextInput
+              value={importText}
+              onChangeText={setImportText}
+              multiline
+              placeholder="把导出的备份全文粘贴到这里"
+              placeholderTextColor={colors.textTertiary}
+              style={[
+                styles.importInput,
+                { color: colors.text, borderColor: colors.border, backgroundColor: colors.background },
+              ]}
+            />
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <Button title="取消" variant="ghost" onPress={() => setImportOpen(false)} style={{ flex: 1 }} />
+              <Button title="导入并覆盖" onPress={handleImportPaste} style={{ flex: 1 }} />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -297,5 +418,23 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 12,
     marginTop: spacing.md,
+  },
+  importBackdrop: {
+    flex: 1,
+    justifyContent: "center",
+    padding: spacing.lg,
+  },
+  importCard: {
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  importInput: {
+    minHeight: 160,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    fontSize: 12,
+    textAlignVertical: "top",
   },
 });

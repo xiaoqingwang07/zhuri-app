@@ -1,6 +1,7 @@
 import { DayTask } from "./types";
 
 const WORKER_URL = "https://zhuri-ai-proxy.xiaoqingwang07.workers.dev";
+const APP_TOKEN = "zhuri_app_token_2026_v1_m3x9k2";
 const DEVICE_ID_KEY = "zhuri_device_id";
 const CUSTOM_API_KEY_STORAGE = "zhuri_custom_api_key";
 const MINIMAX_API_URL = "https://api.minimaxi.com/v1/chat/completions";
@@ -103,7 +104,11 @@ export async function generateTasksWithAI(
   // Default: use built-in worker proxy
   const response = await fetch(WORKER_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-device-id": getDeviceId() },
+    headers: {
+      "Content-Type": "application/json",
+      "x-device-id": getDeviceId(),
+      "x-app-token": APP_TOKEN,
+    },
     body: JSON.stringify({ goal, totalDays }),
     signal,
   });
@@ -118,7 +123,11 @@ export async function saveDataToCloud(data: any): Promise<boolean> {
   try {
     const response = await fetch(`${WORKER_URL}/sync`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-device-id": getDeviceId() },
+      headers: {
+        "Content-Type": "application/json",
+        "x-device-id": getDeviceId(),
+        "x-app-token": APP_TOKEN,
+      },
       body: JSON.stringify(data),
     });
     return response.ok;
@@ -129,7 +138,10 @@ export async function loadDataFromCloud(): Promise<any> {
   try {
     const response = await fetch(`${WORKER_URL}/get`, {
       method: "GET",
-      headers: { "x-device-id": getDeviceId() },
+      headers: {
+        "x-device-id": getDeviceId(),
+        "x-app-token": APP_TOKEN,
+      },
     });
     if (!response.ok) return null;
     const data = await response.json();

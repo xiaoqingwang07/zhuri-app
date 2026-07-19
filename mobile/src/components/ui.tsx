@@ -22,13 +22,16 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 export function Card({
   children,
   style,
+  onLayout,
 }: {
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
+  onLayout?: (event: any) => void;
 }) {
   const { colors, isDark } = useTheme();
   return (
     <View
+      onLayout={onLayout}
       style={[
         styles.card,
         {
