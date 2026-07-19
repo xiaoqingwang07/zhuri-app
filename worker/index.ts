@@ -259,18 +259,60 @@ function stripThinking(content: string): string {
   return content
     .replace(/<think>[\s\S]*?<\/think>/gi, "")
     .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
+    // 兜底：去掉任何残留（含未闭合）的 think 标签本身
+    .replace(/<\/?think(?:ing)?>/gi, "")
     .trim();
 }
 
+// 从指定位置起用括号配对扫描出一个完整 JSON 对象，
+// 正确跳过字符串字面量里的花括号，避免贪婪匹配吞掉多余文本或半截 JSON。
+function balancedJsonFrom(text: string, start: number): string | null {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
 function tokensForPlanDays(totalDays: number): number {
-  // 富任务字段多，按天数抬高上限，避免长计划半截 JSON
-  return Math.min(16384, Math.max(4096, 800 + Number(totalDays) * 140));
+  // MiniMax-M3 是推理模型，<think> 也占用输出额度；富任务字段又多，
+  // 预算需同时覆盖思考 + JSON，否则长计划会被截断成半截 JSON。
+  return Math.min(16384, Math.max(8192, 2000 + Number(totalDays) * 220));
 }
 
 function extractJSON(content: string): any {
-  const cleaned = stripThinking(content);
-  const match = cleaned.match(/\{[\s\S]*\}/);
-  return JSON.parse(match ? match[0] : cleaned);
+  let cleaned = stripThinking(content);
+  // 模型常把 JSON 包在 ```json ... ``` 代码块里，先取块内内容
+  const fence = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) cleaned = fence[1].trim();
+  // 依次尝试每个 '{' 作为起点，返回第一个能成功解析的 JSON 对象
+  // （可跳过推理文本里残留的散花括号）
+  for (let i = cleaned.indexOf("{"); i !== -1; i = cleaned.indexOf("{", i + 1)) {
+    const candidate = balancedJsonFrom(cleaned, i);
+    if (!candidate) continue;
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === "object") return parsed;
+    } catch {
+      // 该起点不是合法 JSON，试下一个
+    }
+  }
+  // 全部失败：退回整段，保持旧的报错语义
+  return JSON.parse(cleaned);
 }
 
 export default {
@@ -434,7 +476,13 @@ export default {
         tokensForPlanDays(Number(totalDays))
       );
       try {
-        return json(extractJSON(content), 200, request);
+        const parsed = extractJSON(content);
+        // 防止把被截断的半截响应（只有 analysis、缺 tasks）当成功返回，
+        // 抛错走下方 500 分支，触发客户端重试
+        if (!parsed || !Array.isArray(parsed.tasks) || parsed.tasks.length === 0) {
+          throw new Error("Incomplete AI response: missing tasks");
+        }
+        return json(parsed, 200, request);
       } catch {
         return json(
           { error: "Failed to parse AI response", raw: content.substring(0, 300) },
