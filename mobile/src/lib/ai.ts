@@ -3,12 +3,25 @@ import { APP_TOKEN, WORKER_URL } from "./config";
 import { kvGet, kvSet } from "./db";
 import { addDays, todayStr } from "./dates";
 import { buildFallbackGoalAnalysis, enrichTaskWithDomainContext } from "./domainCoach";
-import { DEFAULT_GOAL_PROFILE, DayTask, Goal, GoalAnalysis, GoalProfile, PersonaId } from "./types";
+import {
+  DEFAULT_GOAL_PROFILE,
+  DayTask,
+  DurationSuggestion,
+  Goal,
+  GoalAnalysis,
+  GoalProfile,
+  PersonaId,
+} from "./types";
 import { generateDefaultTasks, missedDays } from "./store";
 
 const DEVICE_ID_KEY = "device_id";
-// MiniMax-M3 生成多天计划通常需要 15–30 秒，隧道模式下更慢，超时要留足余量
-const TIMEOUT_MS = 60000;
+/**
+ * 两段式生成（诊断 + 拆解）实测 50–65 秒，长周期计划更久。
+ * 超时必须明显高于这个区间，否则会在临界点随机降级到本地模板。
+ * 短请求（督促文案等）用 SHORT_TIMEOUT_MS。
+ */
+const TIMEOUT_MS = 150000;
+const SHORT_TIMEOUT_MS = 30000;
 
 export function getDeviceId(): string {
   let id = kvGet(DEVICE_ID_KEY);
@@ -19,9 +32,13 @@ export function getDeviceId(): string {
   return id;
 }
 
-async function callWorker<T>(path: string, body: unknown): Promise<T> {
+async function callWorker<T>(
+  path: string,
+  body: unknown,
+  timeoutMs: number = TIMEOUT_MS
+): Promise<T> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(`${WORKER_URL}${path}`, {
       method: "POST",
@@ -43,7 +60,12 @@ async function callWorker<T>(path: string, body: unknown): Promise<T> {
       }
       throw new Error(`AI 服务出错 (${response.status}): ${text.slice(0, 200)}`);
     }
-    return (await response.json()) as T;
+    // 长耗时端点走保活流：状态码在开流时就定了，真正的失败在 body 的 error 字段里
+    const data = (await response.json()) as T & { error?: string };
+    if (data && typeof data === "object" && data.error) {
+      throw new Error(String(data.error));
+    }
+    return data as T;
   } finally {
     clearTimeout(timer);
   }
@@ -80,6 +102,11 @@ function parseGoalAnalysis(
     keyMilestones: sanitizeList(raw.keyMilestones, fallback.keyMilestones),
     riskFactors: sanitizeList(raw.riskFactors, fallback.riskFactors),
     coachStrategy: String(raw.coachStrategy || fallback.coachStrategy),
+    domainKey: raw.domainKey ? String(raw.domainKey) : undefined,
+    feasibilityNote: raw.feasibilityNote ? String(raw.feasibilityNote) : undefined,
+    riskLevel: raw.riskLevel || undefined,
+    riskNote: raw.riskNote ? String(raw.riskNote) : undefined,
+    disclaimer: raw.disclaimer ? String(raw.disclaimer) : undefined,
   };
 }
 
@@ -114,36 +141,52 @@ function mapToDayTask(
   };
 }
 
+export interface PlanQualityMeta {
+  twoStage?: boolean;
+  domainKey?: string;
+  knownSubject?: boolean;
+  retried?: boolean;
+  quality?: {
+    specificRate: number;
+    genericCount: number;
+    duplicateCount: number;
+    pass: boolean;
+  };
+}
+
 export interface PlanGenerationResult {
   tasks: DayTask[];
   usedAI: boolean;
   analysis: GoalAnalysis;
+  meta?: PlanQualityMeta;
 }
 
 /** AI 拆解目标为每日任务；失败抛错由调用方降级到本地模板 */
 export async function generateTasksWithAI(
   goal: string,
   totalDays: number,
-  profile: GoalProfile = DEFAULT_GOAL_PROFILE
+  profile: GoalProfile = DEFAULT_GOAL_PROFILE,
+  persona?: PersonaId
 ): Promise<PlanGenerationResult> {
   const start = todayStr();
-  const data = await callWorker<any>("/", { goal, totalDays, profile });
+  const data = await callWorker<any>("/", { goal, totalDays, profile, persona });
   const analysis = parseGoalAnalysis(data, goal, profile);
   const tasks = parseTaskArray(data).map((t, i) =>
     enrichTaskWithDomainContext(goal, mapToDayTask(t, i, start, profile), i, totalDays, profile, analysis)
   );
   if (tasks.length === 0) throw new Error("AI 返回了空计划");
-  return { tasks, usedAI: true, analysis };
+  return { tasks, usedAI: true, analysis, meta: data?.meta };
 }
 
 /** AI 拆解，最终失败时降级为本地模板 */
 export async function generateTasksWithFallback(
   goal: string,
   totalDays: number,
-  profile: GoalProfile = DEFAULT_GOAL_PROFILE
+  profile: GoalProfile = DEFAULT_GOAL_PROFILE,
+  persona?: PersonaId
 ): Promise<PlanGenerationResult> {
   try {
-    return await generateTasksWithAI(goal, totalDays, profile);
+    return await generateTasksWithAI(goal, totalDays, profile, persona);
   } catch {
     return {
       tasks: generateDefaultTasks(totalDays, goal, profile),
@@ -153,12 +196,35 @@ export async function generateTasksWithFallback(
   }
 }
 
+/** 让陪练判断这个目标该给多少天 */
+export async function suggestDuration(
+  goal: string,
+  profile: GoalProfile = DEFAULT_GOAL_PROFILE
+): Promise<DurationSuggestion> {
+  const data = await callWorker<any>("/suggest-duration", { goal, profile }, 60000);
+  const options = Array.isArray(data?.options) ? data.options : [];
+  return {
+    recommendedDays: Number(data?.recommendedDays) || 21,
+    reason: String(data?.reason || ""),
+    options: options.map((o: any) => ({
+      days: Number(o?.days) || 21,
+      label: String(o?.label || ""),
+      desc: String(o?.desc || ""),
+    })),
+    warning: String(data?.warning || ""),
+  };
+}
+
 export interface AdjustResult {
   tasks: DayTask[];
   message: string;
 }
 
-export type RescueMode = "relaxed" | "steady" | "sprint";
+/**
+ * relaxed/steady/sprint 是落后后的救援节奏；
+ * upgrade/lighten 是正常推进中根据真实反馈做的强度校准（由 paceSignal 触发）。
+ */
+export type RescueMode = "relaxed" | "steady" | "sprint" | "upgrade" | "lighten";
 
 /**
  * 杀手锏：AI 动态调整。
@@ -166,7 +232,8 @@ export type RescueMode = "relaxed" | "steady" | "sprint";
  */
 export async function adjustPlanWithAI(
   goal: Goal,
-  mode: RescueMode = "steady"
+  mode: RescueMode = "steady",
+  persona?: PersonaId
 ): Promise<AdjustResult> {
   const completed = goal.tasks.filter((t) => t.completed);
   const remaining = goal.tasks.filter((t) => !t.completed);
@@ -174,6 +241,7 @@ export async function adjustPlanWithAI(
   const missed = missedDays(goal);
   const extension = mode === "relaxed" ? Math.min(3, Math.max(1, missed)) : 0;
   const compression = mode === "sprint" ? Math.min(3, Math.max(1, missed)) : 0;
+  // 强度校准不改变总天数，只改变每天的量
   const remainingDays = Math.max(1, remaining.length + extension - compression);
 
   const recentFeedback = completed
@@ -204,6 +272,8 @@ export async function adjustPlanWithAI(
     })),
     remainingDays,
     recentFeedback,
+    persona,
+    analysis: goal.analysis,
   });
 
   const rawTasks = parseTaskArray(data);
@@ -253,10 +323,11 @@ export async function generateCoachMessage(
   }
 ): Promise<string> {
   try {
-    const data = await callWorker<{ message: string }>("/coach", {
-      persona,
-      ...context,
-    });
+    const data = await callWorker<{ message: string }>(
+      "/coach",
+      { persona, ...context },
+      SHORT_TIMEOUT_MS
+    );
     if (data.message) return data.message;
     throw new Error("empty");
   } catch {
@@ -282,7 +353,10 @@ export interface WeeklyReview {
 }
 
 /** 每周 AI 复盘 */
-export async function generateWeeklyReview(goals: Goal[]): Promise<WeeklyReview> {
+export async function generateWeeklyReview(
+  goals: Goal[],
+  persona?: PersonaId
+): Promise<WeeklyReview> {
   const today = todayStr();
   const weekAgo = addDays(today, -7);
   const stats = goals.map((g) => {
@@ -298,7 +372,7 @@ export async function generateWeeklyReview(goals: Goal[]): Promise<WeeklyReview>
     };
   });
 
-  const data = await callWorker<WeeklyReview>("/review", { stats });
+  const data = await callWorker<WeeklyReview>("/review", { stats, persona });
   if (!data.summary) throw new Error("AI 复盘失败");
   return {
     summary: data.summary,

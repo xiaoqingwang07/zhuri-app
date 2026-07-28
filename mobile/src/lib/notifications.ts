@@ -1,8 +1,10 @@
+import { Asset } from "expo-asset";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { fallbackCoachMessage } from "./ai";
 import { kvGet, kvSet } from "./db";
 import { addDays, parseDate, todayStr } from "./dates";
+import { goalPhase, pushCopy, SunPhase } from "./sunState";
 import { Goal, PersonaId } from "./types";
 import { nextIncompleteTaskIndex, todayTaskIndex } from "./store";
 
@@ -14,6 +16,29 @@ const REMINDER_ENABLED_KEY = "reminder_enabled";
 export const DEFAULT_REMINDER_HOUR = 21;
 const TODAY_NUDGE_OFFSETS_MIN = [0, 70, 150, 240];
 const FUTURE_WINDOW_DAYS = 7;
+
+/** 推送配图：与 sunState 五阶段一一对应，让用户在通知里就看到太阳的状态 */
+const PUSH_IMAGES: Record<SunPhase, number> = {
+  night: require("../../assets/images/push-night.png"),
+  dusk: require("../../assets/images/push-dusk.png"),
+  dawn: require("../../assets/images/push-dawn.png"),
+  rising: require("../../assets/images/push-rising.png"),
+  noon: require("../../assets/images/push-noon.png"),
+};
+
+/** iOS 通知附件需要本地文件 URI；取不到就静默降级为纯文字通知 */
+async function sunAttachment(phase: SunPhase) {
+  if (Platform.OS !== "ios") return undefined;
+  try {
+    const asset = Asset.fromModule(PUSH_IMAGES[phase]);
+    if (!asset.localUri) await asset.downloadAsync();
+    const uri = asset.localUri || asset.uri;
+    if (!uri) return undefined;
+    return [{ identifier: `sun-${phase}`, url: uri, type: "image/png" }];
+  } catch {
+    return undefined;
+  }
+}
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -92,9 +117,18 @@ export async function rescheduleReminders(
     .filter((item) => item.task && !item.task.completed);
   const primary = unfinishedToday[0]?.goal || activeGoals[0];
 
+  // 太阳状态决定推送的画面和语气：断得越久，图越暗、话越像救援
+  const phase = goalPhase(primary);
+  const primaryTaskIdx = unfinishedToday[0]?.idx ?? -1;
+  const primaryTaskText =
+    primaryTaskIdx !== -1 ? primary.tasks[primaryTaskIdx]?.task : undefined;
+  const copy = pushCopy(phase, primary.name, primaryTaskText);
+  const attachments = await sunAttachment(phase);
+
   const notificationBody = (dateStr: string) => {
     const cachedAI = kvGet(`coach_${primary.id}_${dateStr}_${persona}`);
-    const base = cachedAI || fallbackCoachMessage(persona, primary.name);
+    const base =
+      cachedAI || copy.body || fallbackCoachMessage(persona, primary.name);
     const extra =
       unfinishedToday.length > 1
         ? ` 还有 ${unfinishedToday.length} 个目标没收尾。`
@@ -114,9 +148,10 @@ export async function rescheduleReminders(
       const fireDate = new Date(baseTime + offset * 60 * 1000);
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: offset === 0 ? "逐日 · 今天还没接住" : "逐日 · 别让今天断掉",
+          title: offset === 0 ? copy.title : "逐日 · 别让今天断掉",
           body: notificationBody(today),
           sound: true,
+          ...(attachments ? { attachments } : {}),
         },
         trigger: {
           type: Notifications.SchedulableTriggerInputTypes.DATE,
@@ -137,6 +172,7 @@ export async function rescheduleReminders(
         title: "逐日 · 明天也别断",
         body: notificationBody(dateStr),
         sound: true,
+        ...(attachments ? { attachments } : {}),
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,

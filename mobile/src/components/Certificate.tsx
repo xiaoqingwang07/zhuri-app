@@ -24,6 +24,13 @@ export const Certificate = forwardRef<View, { goal: Goal; watermark?: boolean }>
             历时 {goal.totalDays} 天 · 最长连续 {goal.longestStreak} 天
           </Text>
           <Text style={styles.desc}>于 {completedDate} 达成</Text>
+          {!!goal.completedAheadDays && goal.completedAheadDays > 0 && (
+            <View style={styles.aheadPill}>
+              <Text style={styles.aheadText}>
+                比原计划提前 {goal.completedAheadDays} 天
+              </Text>
+            </View>
+          )}
           <View style={styles.badgeRow}>
             {goal.badges
               .filter((b) => b.unlockedAt)
@@ -80,6 +87,18 @@ const styles = StyleSheet.create({
   desc: {
     fontSize: 13,
     color: "#6B6B72",
+  },
+  aheadPill: {
+    marginTop: 6,
+    backgroundColor: "#FFF1E8",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  aheadText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: BRAND,
   },
   badgeRow: {
     flexDirection: "row",

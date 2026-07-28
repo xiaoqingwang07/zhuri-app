@@ -66,6 +66,29 @@ export interface CheckInResult {
   goal: Goal;
   newBadges: Goal["badges"];
   justCompleted: boolean;
+  /** 完成整个目标时比原计划提前的天数（仅 justCompleted 时有意义） */
+  aheadDays: number;
+}
+
+/**
+ * 完成整个目标时，比原计划提前了多少天。
+ * 用最后一个任务的计划日期和今天比 —— 用户超额推进时会提前把任务做完，
+ * 这个时刻值得被看见，而不是静悄悄地把状态改成 completed。
+ */
+function daysAheadOfPlan(tasks: DayTask[]): number {
+  if (tasks.length === 0) return 0;
+  const lastPlanned = tasks.reduce(
+    (max, t) => (t.date > max ? t.date : max),
+    tasks[0].date
+  );
+  const today = todayStr();
+  if (lastPlanned <= today) return 0;
+  const diff = Math.round(
+    (new Date(`${lastPlanned}T00:00:00`).getTime() -
+      new Date(`${today}T00:00:00`).getTime()) /
+      86400000
+  );
+  return Math.max(0, diff);
 }
 
 export function checkIn(
@@ -83,6 +106,8 @@ export function checkIn(
     blocker: feedback?.blocker,
     adjustmentPreference: feedback?.adjustmentPreference,
     feedbackAt: feedback ? new Date().toISOString() : undefined,
+    challengeCompleted: feedback?.challengeCompleted,
+    proofUri: feedback?.proofUri ?? updatedTasks[dayIndex].proofUri,
   };
 
   const streak = calcStreak(updatedTasks);
@@ -104,6 +129,8 @@ export function checkIn(
 
   const allCompleted = updatedTasks.every((t) => t.completed);
   const status: Goal["status"] = allCompleted ? "completed" : "active";
+  const justCompleted = allCompleted && goal.status !== "completed";
+  const aheadDays = justCompleted ? daysAheadOfPlan(updatedTasks) : 0;
 
   return {
     goal: {
@@ -116,9 +143,11 @@ export function checkIn(
       currentDay,
       status,
       completedAt: allCompleted ? new Date().toISOString() : goal.completedAt,
+      completedAheadDays: justCompleted ? aheadDays : goal.completedAheadDays,
     },
     newBadges,
-    justCompleted: allCompleted && goal.status !== "completed",
+    justCompleted,
+    aheadDays,
   };
 }
 

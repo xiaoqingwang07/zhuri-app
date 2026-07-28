@@ -1,4 +1,5 @@
-import React from "react";
+import * as Haptics from "expo-haptics";
+import React, { useEffect } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -13,6 +14,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
+  withTiming,
 } from "react-native-reanimated";
 import { radius, spacing } from "@/theme/colors";
 import { useTheme } from "@/theme/useTheme";
@@ -52,11 +54,13 @@ export function PressableScale({
   onPress,
   disabled,
   style,
+  haptic,
 }: {
   children: React.ReactNode;
   onPress?: () => void;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
+  haptic?: "selection" | "light";
 }) {
   const scale = useSharedValue(1);
   const animStyle = useAnimatedStyle(() => ({
@@ -64,7 +68,12 @@ export function PressableScale({
   }));
   return (
     <AnimatedPressable
-      onPress={onPress}
+      onPress={() => {
+        if (haptic === "selection") Haptics.selectionAsync().catch(() => {});
+        else if (haptic === "light")
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+        onPress?.();
+      }}
       disabled={disabled}
       onPressIn={() => {
         scale.value = withSpring(0.96, { damping: 15, stiffness: 400 });
@@ -116,6 +125,7 @@ export function Button({
     <PressableScale
       onPress={onPress}
       disabled={disabled || loading}
+      haptic="light"
       style={[
         styles.button,
         {
@@ -160,6 +170,18 @@ export function ProgressBar({
   color?: string;
 }) {
   const { colors } = useTheme();
+  const pct = useSharedValue(0);
+
+  useEffect(() => {
+    pct.value = withTiming(Math.min(100, Math.max(0, progress * 100)), {
+      duration: 700,
+    });
+  }, [progress, pct]);
+
+  const fillStyle = useAnimatedStyle(() => ({
+    width: `${pct.value}%`,
+  }));
+
   return (
     <View
       style={{
@@ -169,13 +191,15 @@ export function ProgressBar({
         overflow: "hidden",
       }}
     >
-      <View
-        style={{
-          width: `${Math.min(100, Math.max(0, progress * 100))}%`,
-          height: "100%",
-          borderRadius: height / 2,
-          backgroundColor: color || colors.primary,
-        }}
+      <Animated.View
+        style={[
+          {
+            height: "100%",
+            borderRadius: height / 2,
+            backgroundColor: color || colors.primary,
+          },
+          fillStyle,
+        ]}
       />
     </View>
   );
@@ -193,7 +217,10 @@ export function Chip({
   const { colors } = useTheme();
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => {
+        Haptics.selectionAsync().catch(() => {});
+        onPress?.();
+      }}
       style={[
         styles.chip,
         {

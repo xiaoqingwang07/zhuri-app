@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import { adjustPlanWithAI, RescueMode } from "./ai";
 import { deleteGoalRow, kvGet, kvSet, loadGoals, saveGoal } from "./db";
+import { deleteGoalProofs } from "./proofPhoto";
 import {
   checkIn as checkInLogic,
   CheckInResult,
@@ -117,7 +118,7 @@ export function GoalsProvider({ children }: { children: React.ReactNode }) {
     async (goalId: string, mode: RescueMode = "steady"): Promise<string> => {
       const goal = loadGoals().find((g) => g.id === goalId);
       if (!goal) throw new Error("目标不存在");
-      const result = await adjustPlanWithAI(goal, mode);
+      const result = await adjustPlanWithAI(goal, mode, persona);
       persist({
         ...goal,
         tasks: result.tasks,
@@ -127,11 +128,13 @@ export function GoalsProvider({ children }: { children: React.ReactNode }) {
       });
       return result.message;
     },
-    [persist]
+    [persist, persona]
   );
 
   const removeGoal = useCallback((goalId: string) => {
     deleteGoalRow(goalId);
+    // 顺带清掉该目标的打卡照片，否则会在沙盒里永久占空间
+    deleteGoalProofs(goalId).catch(() => {});
     setGoals((prev) => prev.filter((g) => g.id !== goalId));
   }, []);
 

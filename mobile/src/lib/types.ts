@@ -25,6 +25,8 @@ export interface DayTask {
   blocker?: string;
   adjustmentPreference?: "keep" | "lighter" | "harder";
   feedbackAt?: string;
+  /** 有余力时额外做了挑战版 —— 记录的是行为,不发奖励 */
+  challengeCompleted?: boolean;
 }
 
 export interface CheckInFeedback {
@@ -32,6 +34,9 @@ export interface CheckInFeedback {
   difficulty: "too_easy" | "just_right" | "too_hard";
   blocker?: string;
   adjustmentPreference: "keep" | "lighter" | "harder";
+  challengeCompleted?: boolean;
+  /** 打卡照片的本地 uri,完全可选 */
+  proofUri?: string;
 }
 
 export interface GoalProfile {
@@ -49,6 +54,24 @@ export interface GoalAnalysis {
   keyMilestones: string[];
   riskFactors: string[];
   coachStrategy: string;
+  /** 受控领域枚举,用于救援时复用同一套领域军规 */
+  domainKey?: string;
+  /** 规模是否匹配可投入时间的判断 */
+  feasibilityNote?: string;
+  /** 高风险领域标记:医疗/极端身体改变/金钱/法律 */
+  riskLevel?: "none" | "medical" | "extreme_body" | "financial" | "legal";
+  /** 该找什么专业人士 */
+  riskNote?: string;
+  /** 必须展示给用户的免责说明 */
+  disclaimer?: string;
+}
+
+/** 陪练建议的计划周期 */
+export interface DurationSuggestion {
+  recommendedDays: number;
+  reason: string;
+  options: { days: number; label: string; desc: string }[];
+  warning: string;
 }
 
 export interface Badge {
@@ -79,6 +102,10 @@ export interface Goal {
   /** AI 动态调整过的次数 */
   adjustCount?: number;
   lastAdjustedAt?: string;
+  /** 完成时比原计划提前的天数（<=0 表示没有提前） */
+  completedAheadDays?: number;
+  /** 用户已拒绝加码提议的日期，避免反复打扰 */
+  upgradeDismissedAt?: string;
 }
 
 export type PersonaId = "gentle" | "strict" | "rational";
