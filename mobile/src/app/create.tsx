@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Modal,
@@ -20,14 +21,24 @@ import Animated, {
   useSharedValue,
   withRepeat,
   withTiming,
+  ZoomIn,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { DisclaimerCard } from "@/components/DisclaimerCard";
+import { RhythmStrip, taskEnergy } from "@/components/RhythmStrip";
 import { Button, Card, Chip, PressableScale } from "@/components/ui";
-import { generateTasksWithFallback } from "@/lib/ai";
+import { generateTasksWithFallback, suggestDuration } from "@/lib/ai";
 import { consumeAIQuota, isProCached, remainingAIQuota } from "@/lib/entitlements";
 import { evaluateGoalFeasibility } from "@/lib/feasibility";
 import { useGoals } from "@/lib/GoalsContext";
-import { DEFAULT_GOAL_PROFILE, DayTask, GOAL_TEMPLATES, GoalAnalysis, GoalProfile } from "@/lib/types";
+import {
+  DEFAULT_GOAL_PROFILE,
+  DayTask,
+  DurationSuggestion,
+  GOAL_TEMPLATES,
+  GoalAnalysis,
+  GoalProfile,
+} from "@/lib/types";
 import { radius, spacing } from "@/theme/colors";
 import { useTheme } from "@/theme/useTheme";
 
@@ -35,6 +46,8 @@ type Step = "input" | "loading" | "confirm";
 
 const DAY_OPTIONS = [7, 14, 21, 30, 60, 100];
 const MINUTE_OPTIONS = [15, 25, 40, 60];
+const MIN_DAYS = 3;
+const MAX_DAYS = 365;
 
 const LEVEL_OPTIONS: { label: string; value: GoalProfile["currentLevel"] }[] = [
   { label: "刚开始", value: "beginner" },
@@ -54,29 +67,32 @@ const WEEKDAY_OPTIONS: { label: string; value: GoalProfile["weekdayMode"] }[] = 
   { label: "工作日多做", value: "workday_more" },
 ];
 
-const LOADING_HINTS = [
-  "先判断这是不是一个会半路崩掉的计划…",
-  "给你留最低完成版，忙的时候也能不断档…",
-  "把前几天调轻一点，先让身体进入节奏…",
-  "正在安排缓冲日，防止计划太脆…",
-  "最后检查：每天能不能真的做完…",
+const DIAGNOSIS_STEPS: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
+  { icon: "search", label: "识别领域和对象，像专家一样看这个目标" },
+  { icon: "shield-checkmark", label: "判断可行性，太满的计划先拦下来" },
+  { icon: "trending-up", label: "设计强度曲线：前几天轻，再稳步加码" },
+  { icon: "leaf", label: "给每天都留一个最低完成版，忙也不断档" },
+  { icon: "sparkles", label: "写好验收标准和陪练策略" },
 ];
 
-function LoadingView() {
+// 分步「诊断」把 15-60 秒的等待变成能看见的思考过程；
+// 前几步按节奏勾选，最后一步保持进行中直到 AI 真正返回
+function LoadingView({ goal }: { goal: string }) {
   const { colors } = useTheme();
-  const [hintIndex, setHintIndex] = useState(0);
+  const [doneCount, setDoneCount] = useState(0);
   const rotation = useSharedValue(0);
 
   useEffect(() => {
     rotation.value = withRepeat(
-      withTiming(360, { duration: 1200, easing: Easing.linear }),
+      withTiming(360, { duration: 2400, easing: Easing.linear }),
       -1
     );
-    const timer = setInterval(
-      () => setHintIndex((i) => Math.min(i + 1, LOADING_HINTS.length - 1)),
-      2500
+    // 两段式生成实测 50-65 秒，节奏按真实耗时铺开，最后一步等 AI 真正返回
+    const milestones = [4000, 12000, 24000, 38000];
+    const timers = milestones.map((ms, i) =>
+      setTimeout(() => setDoneCount(i + 1), ms)
     );
-    return () => clearInterval(timer);
+    return () => timers.forEach(clearTimeout);
   }, [rotation]);
 
   const spinStyle = useAnimatedStyle(() => ({
@@ -86,18 +102,68 @@ function LoadingView() {
   return (
     <View style={styles.loadingContainer}>
       <Animated.View style={spinStyle}>
-        <Text style={{ fontSize: 56 }}>☀️</Text>
+        <Text style={{ fontSize: 44 }}>☀️</Text>
       </Animated.View>
       <Text style={[styles.loadingTitle, { color: colors.text }]}>
-        正在生成陪跑计划
+        陪练正在诊断这个目标
       </Text>
-      <Animated.Text
-        key={hintIndex}
-        entering={FadeInDown}
-        style={[styles.loadingHint, { color: colors.textSecondary }]}
+      <Text
+        style={[styles.loadingGoal, { color: colors.textSecondary }]}
+        numberOfLines={2}
       >
-        {LOADING_HINTS[hintIndex]}
-      </Animated.Text>
+        「{goal}」
+      </Text>
+      <View
+        style={[
+          styles.stepList,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ]}
+      >
+        {DIAGNOSIS_STEPS.map((step, i) => {
+          const state = i < doneCount ? "done" : i === doneCount ? "active" : "pending";
+          return (
+            <View key={step.label} style={styles.stepRow}>
+              <View
+                style={[
+                  styles.stepIcon,
+                  {
+                    backgroundColor:
+                      state === "done"
+                        ? colors.successSoft
+                        : state === "active"
+                          ? colors.primarySoft
+                          : colors.background,
+                  },
+                ]}
+              >
+                {state === "done" ? (
+                  <Animated.View entering={ZoomIn.springify().damping(12)}>
+                    <Ionicons name="checkmark" size={15} color={colors.success} />
+                  </Animated.View>
+                ) : state === "active" ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Ionicons name={step.icon} size={13} color={colors.textTertiary} />
+                )}
+              </View>
+              <Text
+                style={[
+                  styles.stepLabel,
+                  {
+                    color: state === "pending" ? colors.textTertiary : colors.text,
+                    fontWeight: state === "active" ? "800" : "600",
+                  },
+                ]}
+              >
+                {step.label}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+      <Text style={[styles.loadingHint, { color: colors.textTertiary }]}>
+        陪练会先深想再落笔，通常需要 1 分钟左右
+      </Text>
     </View>
   );
 }
@@ -123,11 +189,35 @@ function TaskMeta({ task }: { task: DayTask }) {
   );
 }
 
+// 确认页的单日任务行：只保留任务 + 元信息 + 重点，细节留到「今日」页再看
+function TaskRowCard({ task, onEdit }: { task: DayTask; onEdit: () => void }) {
+  const { colors } = useTheme();
+  return (
+    <PressableScale onPress={onEdit}>
+      <Card style={styles.taskRow}>
+        <View style={[styles.dayBubble, { backgroundColor: colors.primarySoft }]}>
+          <Text style={[styles.dayBubbleText, { color: colors.primary }]}>D{task.day}</Text>
+        </View>
+        <View style={{ flex: 1, gap: 6 }}>
+          <Text style={[styles.taskRowText, { color: colors.text }]}>{task.task}</Text>
+          <TaskMeta task={task} />
+          {!!task.focus && (
+            <Text style={[styles.taskFocus, { color: colors.primary }]}>
+              今日重点：{task.focus}
+            </Text>
+          )}
+        </View>
+        <Ionicons name="pencil" size={16} color={colors.textTertiary} />
+      </Card>
+    </PressableScale>
+  );
+}
+
 export default function CreateGoalScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { addGoal } = useGoals();
+  const { addGoal, persona } = useGoals();
 
   const [step, setStep] = useState<Step>("input");
   const [goalText, setGoalText] = useState("");
@@ -140,7 +230,62 @@ export default function CreateGoalScreen() {
   const [editText, setEditText] = useState("");
   const [acceptedStretchGoal, setAcceptedStretchGoal] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [expandedWeeks, setExpandedWeeks] = useState<Set<number>>(() => new Set([0]));
+  const [customDaysOpen, setCustomDaysOpen] = useState(false);
+  const [customDaysText, setCustomDaysText] = useState("");
+  const [suggestion, setSuggestion] = useState<DurationSuggestion | null>(null);
+  const [suggesting, setSuggesting] = useState(false);
   const generatingRef = useRef(false);
+
+  const isCustomDays = !DAY_OPTIONS.includes(days);
+
+  const applyCustomDays = useCallback(() => {
+    const parsed = Number(customDaysText.trim());
+    if (!Number.isFinite(parsed) || parsed < MIN_DAYS || parsed > MAX_DAYS) {
+      Alert.alert("周期不合适", `请输入 ${MIN_DAYS}–${MAX_DAYS} 之间的天数。`);
+      return;
+    }
+    setDays(Math.round(parsed));
+    setCustomDaysOpen(false);
+    Haptics.selectionAsync().catch(() => {});
+  }, [customDaysText]);
+
+  // 让陪练判断这个目标该给多少天 —— 专家才有资格定周期,外行才让用户拍脑袋
+  const askSuggestion = useCallback(async () => {
+    const goal = goalText.trim();
+    if (!goal) {
+      Alert.alert("先说出目标", "陪练要先知道你想做什么,才能判断需要多久。");
+      return;
+    }
+    setSuggesting(true);
+    try {
+      const result = await suggestDuration(goal, profile);
+      setSuggestion(result);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } catch {
+      Alert.alert("暂时问不到", "陪练现在不可用,你可以先自己选一个周期。");
+    } finally {
+      setSuggesting(false);
+    }
+  }, [goalText, profile]);
+
+  // 超过 10 天的计划按周折叠，避免确认页变成 30 张卡片墙
+  const weekGroups = useMemo(() => {
+    if (tasks.length <= 10) return null;
+    const weeks: DayTask[][] = [];
+    for (let i = 0; i < tasks.length; i += 7) weeks.push(tasks.slice(i, i + 7));
+    return weeks;
+  }, [tasks]);
+
+  const toggleWeek = useCallback((w: number) => {
+    Haptics.selectionAsync().catch(() => {});
+    setExpandedWeeks((prev) => {
+      const next = new Set(prev);
+      if (next.has(w)) next.delete(w);
+      else next.add(w);
+      return next;
+    });
+  }, []);
 
   const updateProfile = useCallback((patch: Partial<GoalProfile>) => {
     setProfile((prev) => ({ ...prev, ...patch }));
@@ -210,17 +355,18 @@ export default function CreateGoalScreen() {
     generatingRef.current = true;
     setStep("loading");
     try {
-      const result = await generateTasksWithFallback(goal, days, profile);
+      const result = await generateTasksWithFallback(goal, days, profile, persona);
       if (result.usedAI) consumeAIQuota();
       setTasks(result.tasks);
       setGoalAnalysis(result.analysis);
       setUsedAI(result.usedAI);
+      setExpandedWeeks(new Set([0]));
       setStep("confirm");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } finally {
       generatingRef.current = false;
     }
-  }, [goalText, days, profile, acceptedStretchGoal, router]);
+  }, [goalText, days, profile, acceptedStretchGoal, persona, router]);
 
   const confirm = useCallback(() => {
     addGoal(goalText.trim(), days, tasks, profile, goalAnalysis || undefined);
@@ -269,7 +415,7 @@ export default function CreateGoalScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      {step === "loading" && <LoadingView />}
+      {step === "loading" && <LoadingView goal={goalText.trim()} />}
 
       {step === "input" && (
         <ScrollView
@@ -306,12 +452,102 @@ export default function CreateGoalScreen() {
           </View>
 
           <View style={{ gap: spacing.sm }}>
-            <Text style={[styles.label, { color: colors.text }]}>计划周期</Text>
+            <View style={styles.labelRow}>
+              <Text style={[styles.label, { color: colors.text }]}>计划周期</Text>
+              <PressableScale onPress={askSuggestion} disabled={suggesting}>
+                <View style={[styles.askPill, { backgroundColor: colors.primarySoft }]}>
+                  {suggesting ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <Ionicons name="sparkles" size={13} color={colors.primary} />
+                  )}
+                  <Text style={[styles.askPillText, { color: colors.primary }]}>
+                    {suggesting ? "陪练思考中" : "让陪练建议"}
+                  </Text>
+                </View>
+              </PressableScale>
+            </View>
             <View style={styles.chipRow}>
               {DAY_OPTIONS.map((d) => (
                 <Chip key={d} label={`${d}天`} active={days === d} onPress={() => setDays(d)} />
               ))}
+              <Chip
+                label={isCustomDays ? `${days}天 ·自定义` : "自定义"}
+                active={isCustomDays}
+                onPress={() => {
+                  setCustomDaysText(isCustomDays ? String(days) : "");
+                  setCustomDaysOpen(true);
+                }}
+              />
             </View>
+
+            {suggestion && (
+              <Animated.View entering={FadeInDown.springify()}>
+                <Card style={{ gap: spacing.sm }}>
+                  <View style={styles.suggestHeader}>
+                    <Ionicons name="sparkles" size={16} color={colors.primary} />
+                    <Text style={[styles.suggestTitle, { color: colors.text }]}>
+                      陪练建议 {suggestion.recommendedDays} 天
+                    </Text>
+                  </View>
+                  {!!suggestion.reason && (
+                    <Text style={[styles.suggestReason, { color: colors.textSecondary }]}>
+                      {suggestion.reason}
+                    </Text>
+                  )}
+                  {!!suggestion.warning && (
+                    <View style={[styles.warnBox, { backgroundColor: colors.warningSoft }]}>
+                      <Text style={[styles.warnText, { color: colors.text }]}>
+                        {suggestion.warning}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={{ gap: spacing.sm }}>
+                    {suggestion.options.map((opt) => {
+                      const active = days === opt.days;
+                      return (
+                        <PressableScale
+                          key={`${opt.label}-${opt.days}`}
+                          onPress={() => {
+                            setDays(opt.days);
+                            Haptics.selectionAsync().catch(() => {});
+                          }}
+                        >
+                          <View
+                            style={[
+                              styles.suggestOption,
+                              {
+                                backgroundColor: active ? colors.primarySoft : colors.background,
+                                borderColor: active ? colors.primary : colors.border,
+                              },
+                            ]}
+                          >
+                            <View style={[styles.suggestDays, { backgroundColor: colors.card }]}>
+                              <Text style={[styles.suggestDaysText, { color: colors.primary }]}>
+                                {opt.days}天
+                              </Text>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.suggestLabel, { color: colors.text }]}>
+                                {opt.label}
+                              </Text>
+                              <Text
+                                style={[styles.suggestDesc, { color: colors.textSecondary }]}
+                              >
+                                {opt.desc}
+                              </Text>
+                            </View>
+                            {active && (
+                              <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                            )}
+                          </View>
+                        </PressableScale>
+                      );
+                    })}
+                  </View>
+                </Card>
+              </Animated.View>
+            )}
           </View>
 
           <Card style={styles.diagnosisCard}>
@@ -437,86 +673,120 @@ export default function CreateGoalScreen() {
           <ScrollView
             contentContainerStyle={{ padding: spacing.md, gap: spacing.sm, paddingBottom: 140 }}
           >
-            <Card style={styles.summaryCard}>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.confirmGoal, { color: colors.text }]}>{goalText}</Text>
-                <Text style={[styles.confirmMeta, { color: colors.textSecondary }]}>
-                  共 {tasks.length} 天 · 每天约 {profile.dailyMinutes} 分钟 · {usedAI ? "AI 陪跑生成" : "本地陪跑计划"}
-                </Text>
-              </View>
-              <Text style={styles.summaryEmoji}>🌤️</Text>
-            </Card>
-
-            {goalAnalysis && (
-              <Card style={styles.analysisCard}>
-                <View style={styles.analysisHeader}>
-                  <View>
-                    <Text style={[styles.analysisKicker, { color: colors.primary }]}>
-                      AI 对这个目标的理解
-                    </Text>
-                    <Text style={[styles.analysisTitle, { color: colors.text }]}>
-                      {goalAnalysis.domain} · {goalAnalysis.subject}
-                    </Text>
-                  </View>
-                  <Ionicons name="sparkles" size={22} color={colors.primary} />
-                </View>
-                <Text style={[styles.analysisBody, { color: colors.textSecondary }]}>
-                  {goalAnalysis.expertiseAngle}
-                </Text>
-                <View style={[styles.strategyBox, { backgroundColor: colors.background }]}>
-                  <Text style={[styles.strategyLabel, { color: colors.textTertiary }]}>陪练策略</Text>
-                  <Text style={[styles.strategyText, { color: colors.text }]}>
-                    {goalAnalysis.coachStrategy}
+            <Animated.View entering={FadeInDown.springify()}>
+              <Card style={styles.summaryCard}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.confirmGoal, { color: colors.text }]}>{goalText}</Text>
+                  <Text style={[styles.confirmMeta, { color: colors.textSecondary }]}>
+                    共 {tasks.length} 天 · 每天约 {profile.dailyMinutes} 分钟 · {usedAI ? "AI 陪跑生成" : "本地陪跑计划"}
                   </Text>
                 </View>
-                <View style={styles.analysisList}>
-                  {goalAnalysis.keyMilestones.slice(0, 4).map((item) => (
-                    <View key={item} style={[styles.analysisChip, { backgroundColor: colors.primarySoft }]}>
-                      <Text style={[styles.analysisChipText, { color: colors.textSecondary }]}>
-                        {item}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
+                <Text style={styles.summaryEmoji}>🌤️</Text>
               </Card>
+            </Animated.View>
+
+            {goalAnalysis?.disclaimer && (
+              <Animated.View entering={FadeInDown.delay(45).springify()}>
+                <DisclaimerCard analysis={goalAnalysis} />
+              </Animated.View>
             )}
 
-            {tasks.map((task, i) => (
-              <PressableScale
-                key={i}
-                onPress={() => {
-                  setEditingIndex(i);
-                  setEditText(task.task);
-                }}
-              >
-                <Card style={styles.taskRow}>
-                  <View style={[styles.dayBubble, { backgroundColor: colors.primarySoft }]}>
-                    <Text style={[styles.dayBubbleText, { color: colors.primary }]}>D{task.day}</Text>
-                  </View>
-                  <View style={{ flex: 1, gap: 6 }}>
-                    <Text style={[styles.taskRowText, { color: colors.text }]}>{task.task}</Text>
-                    <TaskMeta task={task} />
-                    {!!task.focus && (
-                      <Text style={[styles.taskFocus, { color: colors.primary }]}>
-                        今日重点：{task.focus}
+            {goalAnalysis && (
+              <Animated.View entering={FadeInDown.delay(90).springify()}>
+                <Card style={styles.analysisCard}>
+                  <View style={styles.analysisHeader}>
+                    <View>
+                      <Text style={[styles.analysisKicker, { color: colors.primary }]}>
+                        陪练对这个目标的理解
                       </Text>
-                    )}
-                    {!!task.successCheck && (
-                      <Text style={[styles.taskCheck, { color: colors.textSecondary }]}>
-                        验收：{task.successCheck}
-                      </Text>
-                    )}
-                    <View style={[styles.minimumBox, { backgroundColor: colors.background }]}>
-                      <Text style={[styles.minimumLabel, { color: colors.textTertiary }]}>最低完成版</Text>
-                      <Text style={[styles.minimumText, { color: colors.textSecondary }]}>
-                        {task.minimumTask || "先做 10 分钟，保住节奏"}
+                      <Text style={[styles.analysisTitle, { color: colors.text }]}>
+                        {goalAnalysis.domain} · {goalAnalysis.subject}
                       </Text>
                     </View>
+                    <Ionicons name="sparkles" size={22} color={colors.primary} />
                   </View>
-                  <Ionicons name="pencil" size={16} color={colors.textTertiary} />
+                  <Text style={[styles.analysisBody, { color: colors.textSecondary }]}>
+                    {goalAnalysis.expertiseAngle}
+                  </Text>
+                  <View style={[styles.strategyBox, { backgroundColor: colors.background }]}>
+                    <Text style={[styles.strategyLabel, { color: colors.textTertiary }]}>陪练策略</Text>
+                    <Text style={[styles.strategyText, { color: colors.text }]}>
+                      {goalAnalysis.coachStrategy}
+                    </Text>
+                  </View>
+                  <View style={styles.analysisList}>
+                    {goalAnalysis.keyMilestones.slice(0, 4).map((item) => (
+                      <View key={item} style={[styles.analysisChip, { backgroundColor: colors.primarySoft }]}>
+                        <Text style={[styles.analysisChipText, { color: colors.textSecondary }]}>
+                          {item}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
                 </Card>
-              </PressableScale>
-            ))}
+              </Animated.View>
+            )}
+
+            <Animated.View entering={FadeInDown.delay(180).springify()}>
+              <Card style={{ gap: spacing.sm }}>
+                <Text style={[styles.rhythmTitle, { color: colors.text }]}>
+                  为你设计的节奏，不是平均分配
+                </Text>
+                <RhythmStrip tasks={tasks} />
+              </Card>
+            </Animated.View>
+
+            {weekGroups
+              ? weekGroups.map((week, w) => {
+                  const open = expandedWeeks.has(w);
+                  const pushDays = week.filter((t) => taskEnergy(t) === "push").length;
+                  return (
+                    <React.Fragment key={`week-${w}`}>
+                      <PressableScale onPress={() => toggleWeek(w)}>
+                        <Card style={styles.weekHeader}>
+                          <View style={{ flex: 1, gap: 8 }}>
+                            <View style={styles.weekTitleRow}>
+                              <Text style={[styles.weekTitle, { color: colors.text }]}>
+                                第 {w + 1} 周
+                              </Text>
+                              <Text style={[styles.weekMeta, { color: colors.textTertiary }]}>
+                                D{week[0].day}–D{week[week.length - 1].day}
+                                {pushDays > 0 ? ` · 冲刺 ${pushDays} 天` : " · 轻松推进"}
+                              </Text>
+                            </View>
+                            {!open && <RhythmStrip tasks={week} showLegend={false} />}
+                          </View>
+                          <Ionicons
+                            name={open ? "chevron-up" : "chevron-down"}
+                            size={18}
+                            color={colors.textTertiary}
+                          />
+                        </Card>
+                      </PressableScale>
+                      {open &&
+                        week.map((t, j) => (
+                          <TaskRowCard
+                            key={`t${w * 7 + j}`}
+                            task={t}
+                            onEdit={() => {
+                              setEditingIndex(w * 7 + j);
+                              setEditText(t.task);
+                            }}
+                          />
+                        ))}
+                    </React.Fragment>
+                  );
+                })
+              : tasks.map((task, i) => (
+                  <TaskRowCard
+                    key={i}
+                    task={task}
+                    onEdit={() => {
+                      setEditingIndex(i);
+                      setEditText(task.task);
+                    }}
+                  />
+                ))}
           </ScrollView>
 
           <View
@@ -534,6 +804,50 @@ export default function CreateGoalScreen() {
           </View>
         </>
       )}
+
+      <Modal
+        visible={customDaysOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCustomDaysOpen(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={[styles.editBackdrop, { backgroundColor: colors.overlay }]}
+        >
+          <View style={[styles.editCard, { backgroundColor: colors.card }]}>
+            <Text style={[styles.label, { color: colors.text }]}>自定义周期</Text>
+            <Text style={[styles.customHint, { color: colors.textSecondary }]}>
+              输入 {MIN_DAYS}–{MAX_DAYS} 之间的天数。太长的周期更难坚持,可以先做第一阶段。
+            </Text>
+            <TextInput
+              value={customDaysText}
+              onChangeText={(t) => setCustomDaysText(t.replace(/[^0-9]/g, ""))}
+              keyboardType="number-pad"
+              autoFocus
+              placeholder="例如 45"
+              placeholderTextColor={colors.textTertiary}
+              style={[
+                styles.customInput,
+                {
+                  backgroundColor: colors.background,
+                  color: colors.text,
+                  borderColor: colors.border,
+                },
+              ]}
+            />
+            <View style={{ flexDirection: "row", gap: spacing.sm }}>
+              <Button
+                title="取消"
+                variant="ghost"
+                onPress={() => setCustomDaysOpen(false)}
+                style={{ flex: 1 }}
+              />
+              <Button title="确定" onPress={applyCustomDays} style={{ flex: 1 }} />
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       <Modal
         visible={editingIndex !== null}
@@ -617,6 +931,86 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 16,
+    fontWeight: "800",
+  },
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+  },
+  askPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: radius.full,
+    minHeight: 32,
+  },
+  askPillText: {
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  suggestHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  suggestTitle: {
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  suggestReason: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  warnBox: {
+    borderRadius: radius.md,
+    padding: spacing.sm,
+  },
+  warnText: {
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  suggestOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+  },
+  suggestDays: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.sm,
+  },
+  suggestDaysText: {
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  suggestLabel: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  suggestDesc: {
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 2,
+  },
+  customHint: {
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: -6,
+  },
+  customInput: {
+    minHeight: 52,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    fontSize: 18,
     fontWeight: "800",
   },
   input: {
@@ -704,16 +1098,69 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: spacing.md,
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.lg,
   },
   loadingTitle: {
     fontSize: 22,
     fontWeight: "900",
   },
-  loadingHint: {
+  loadingGoal: {
     fontSize: 14,
+    fontWeight: "600",
     textAlign: "center",
-    lineHeight: 21,
+    marginTop: -6,
+  },
+  stepList: {
+    alignSelf: "stretch",
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: spacing.md,
+    gap: 14,
+  },
+  stepRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  stepIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stepLabel: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  loadingHint: {
+    fontSize: 12,
+    textAlign: "center",
+    lineHeight: 18,
+  },
+  rhythmTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  weekHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: 12,
+  },
+  weekTitleRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: spacing.sm,
+  },
+  weekTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  weekMeta: {
+    fontSize: 12,
+    fontWeight: "600",
   },
   summaryCard: {
     flexDirection: "row",
@@ -807,11 +1254,7 @@ const styles = StyleSheet.create({
   taskFocus: {
     fontSize: 12,
     lineHeight: 17,
-    fontWeight: "900",
-  },
-  taskCheck: {
-    fontSize: 12,
-    lineHeight: 18,
+    fontWeight: "800",
   },
   metaRow: {
     flexDirection: "row",
@@ -825,19 +1268,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: radius.full,
     overflow: "hidden",
-  },
-  minimumBox: {
-    borderRadius: radius.md,
-    padding: spacing.sm,
-    gap: 2,
-  },
-  minimumLabel: {
-    fontSize: 11,
-    fontWeight: "800",
-  },
-  minimumText: {
-    fontSize: 13,
-    lineHeight: 18,
   },
   bottomBar: {
     position: "absolute",

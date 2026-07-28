@@ -14,6 +14,8 @@ import { captureRef } from "react-native-view-shot";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Certificate } from "@/components/Certificate";
 import { Confetti } from "@/components/Confetti";
+import { DisclaimerCard } from "@/components/DisclaimerCard";
+import { RhythmStrip } from "@/components/RhythmStrip";
 import { Button, Card, PressableScale, ProgressBar, SectionTitle } from "@/components/ui";
 import { RescueMode } from "@/lib/ai";
 import { isProCached } from "@/lib/entitlements";
@@ -58,6 +60,8 @@ export default function GoalDetailScreen() {
   const goal = goals.find((g) => g.id === id);
 
   const [adjusting, setAdjusting] = useState(false);
+  const [analysisOpen, setAnalysisOpen] = useState(false);
+  const [tasksOpen, setTasksOpen] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const certificateRef = useRef<View>(null);
   const scrollRef = useRef<ScrollView>(null);
@@ -166,6 +170,12 @@ export default function GoalDetailScreen() {
   const rate = completionRate(goal);
   const unlockedBadges = goal.badges.filter((b) => b.unlockedAt);
 
+  // 收起时以今天为中心取一小段，用户最关心的永远是眼下这几天
+  const todayIdx = Math.max(0, goal.tasks.findIndex((t) => t.date >= today));
+  const visibleTasks = tasksOpen
+    ? goal.tasks
+    : goal.tasks.slice(Math.max(0, todayIdx - 2), todayIdx + 4);
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <ScrollView
@@ -197,6 +207,7 @@ export default function GoalDetailScreen() {
         <Card style={{ gap: spacing.sm }}>
           <Text style={[styles.goalName, { color: colors.text }]}>{goal.name}</Text>
           <ProgressBar progress={rate} height={10} />
+          <RhythmStrip tasks={goal.tasks} showLegend={false} />
           <View style={styles.statsRow}>
             <Stat label="完成率" value={`${Math.round(rate * 100)}%`} />
             <Stat label="连续" value={`${goal.streak}天`} />
@@ -205,27 +216,38 @@ export default function GoalDetailScreen() {
           </View>
         </Card>
 
+        <DisclaimerCard analysis={goal.analysis} />
+
+        {/* 诊断默认只露策略一句；整段专家分析想看再展开，不然一进页面就是一屏字 */}
         {goal.analysis && (
-          <Card style={styles.analysisCard}>
-            <View style={styles.analysisHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.analysisKicker, { color: colors.primary }]}>陪练诊断</Text>
-                <Text style={[styles.analysisTitle, { color: colors.text }]}>
-                  {goal.analysis.domain} · {goal.analysis.subject}
-                </Text>
+          <PressableScale onPress={() => setAnalysisOpen((v) => !v)}>
+            <Card style={{ gap: spacing.sm }}>
+              <View style={styles.analysisHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.analysisKicker, { color: colors.primary }]}>陪练诊断</Text>
+                  <Text style={[styles.analysisTitle, { color: colors.text }]} numberOfLines={1}>
+                    {goal.analysis.domain} · {goal.analysis.subject}
+                  </Text>
+                </View>
+                <Ionicons
+                  name={analysisOpen ? "chevron-up" : "chevron-down"}
+                  size={18}
+                  color={colors.textTertiary}
+                />
               </View>
-              <Ionicons name="sparkles" size={22} color={colors.primary} />
-            </View>
-            <Text style={[styles.analysisBody, { color: colors.textSecondary }]}>
-              {goal.analysis.expertiseAngle}
-            </Text>
-            <View style={[styles.strategyBox, { backgroundColor: colors.background }]}>
-              <Text style={[styles.strategyLabel, { color: colors.textTertiary }]}>策略</Text>
-              <Text style={[styles.strategyText, { color: colors.text }]}>
+              <Text
+                style={[styles.strategyText, { color: colors.textSecondary }]}
+                numberOfLines={analysisOpen ? undefined : 2}
+              >
                 {goal.analysis.coachStrategy}
               </Text>
-            </View>
-          </Card>
+              {analysisOpen && (
+                <Text style={[styles.analysisBody, { color: colors.textSecondary }]}>
+                  {goal.analysis.expertiseAngle}
+                </Text>
+              )}
+            </Card>
+          </PressableScale>
         )}
 
         {/* 已完成目标 → 证书 */}
@@ -328,11 +350,20 @@ export default function GoalDetailScreen() {
           </Card>
         </View>
 
-        {/* 全部任务 */}
+        {/* 全部任务：默认只显示今天前后几天，30 天全铺开要滚很久 */}
         <View>
-          <SectionTitle>全部任务</SectionTitle>
+          <PressableScale onPress={() => setTasksOpen((v) => !v)}>
+            <View style={styles.tasksHeader}>
+              <SectionTitle style={{ marginBottom: 0 }}>
+                全部任务 {goal.tasks.filter((t) => t.completed).length}/{goal.tasks.length}
+              </SectionTitle>
+              <Text style={[styles.tasksToggle, { color: colors.primary }]}>
+                {tasksOpen ? "收起" : "展开全部"}
+              </Text>
+            </View>
+          </PressableScale>
           <Card style={{ gap: 2, paddingVertical: spacing.sm }}>
-            {goal.tasks.map((task, i) => {
+            {visibleTasks.map((task, i) => {
               const isToday = task.date === today;
               const isMissed = !task.completed && task.date < today;
               return (
@@ -427,8 +458,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     marginTop: spacing.xs,
   },
-  analysisCard: {
-    gap: spacing.md,
+  tasksHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  tasksToggle: {
+    fontSize: 12,
+    fontWeight: "700",
   },
   analysisHeader: {
     flexDirection: "row",

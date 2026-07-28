@@ -1,4 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
@@ -11,13 +13,32 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, PressableScale } from "@/components/ui";
 import { kvSet } from "@/lib/db";
+import { useGoals } from "@/lib/GoalsContext";
+import { PERSONAS, PersonaId } from "@/lib/types";
 import { radius, spacing } from "@/theme/colors";
 import { useTheme } from "@/theme/useTheme";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 
-const SLIDES = [
+type Slide =
+  | {
+      kind: "intro";
+      marker: string;
+      emoji: string;
+      title: string;
+      desc: string;
+      tag: string;
+    }
+  | {
+      kind: "persona";
+      marker: string;
+      title: string;
+      desc: string;
+    };
+
+const SLIDES: Slide[] = [
   {
+    kind: "intro",
     marker: "01",
     emoji: "☀️",
     title: "每天只看今天",
@@ -25,25 +46,40 @@ const SLIDES = [
     tag: "不是清单，是陪练",
   },
   {
+    kind: "intro",
     marker: "02",
     emoji: "⚡️",
     title: "断了也能接回来",
     desc: "如果计划太满、状态变差或落后几天，逐日会根据真实反馈重排节奏，不用从头再来。",
     tag: "把放弃点变成救援点",
   },
+  {
+    kind: "persona",
+    marker: "03",
+    title: "选一个陪练风格",
+    desc: "提醒和督促的语气都会跟着变，之后在设置里随时可换。",
+  },
 ];
 
 export default function OnboardingScreen() {
-  const { colors } = useTheme();
+  const { colors, gradients } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { persona, setPersona } = useGoals();
   const [index, setIndex] = useState(0);
+  const [picked, setPicked] = useState<PersonaId>(persona);
   const listRef = useRef<FlatList>(null);
   const isLast = index === SLIDES.length - 1;
 
   const finish = () => {
+    setPersona(picked);
     kvSet("onboarding_done", "1");
     router.replace("/");
+  };
+
+  const pick = (id: PersonaId) => {
+    Haptics.selectionAsync().catch(() => {});
+    setPicked(id);
   };
 
   return (
@@ -63,23 +99,75 @@ export default function OnboardingScreen() {
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        keyExtractor={(item) => item.title}
+        keyExtractor={(item) => item.marker}
         onMomentumScrollEnd={(e) =>
           setIndex(Math.round(e.nativeEvent.contentOffset.x / SCREEN_W))
         }
         renderItem={({ item }) => (
           <View style={[styles.slide, { width: SCREEN_W }]}>
             <View style={[styles.poster, { backgroundColor: colors.card }]}>
+              <LinearGradient
+                colors={gradients.sunrise}
+                start={{ x: 0.2, y: 0 }}
+                end={{ x: 0.6, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
               <View style={[styles.marker, { backgroundColor: colors.primarySoft }]}>
                 <Text style={[styles.markerText, { color: colors.primary }]}>{item.marker}</Text>
               </View>
-              <Text style={styles.emoji}>{item.emoji}</Text>
-              <Text style={[styles.slideTitle, { color: colors.text }]}>{item.title}</Text>
-              <Text style={[styles.slideDesc, { color: colors.textSecondary }]}>{item.desc}</Text>
-              <View style={[styles.tag, { backgroundColor: colors.primarySoft }]}>
-                <Ionicons name="sparkles" size={14} color={colors.primary} />
-                <Text style={[styles.tagText, { color: colors.primary }]}>{item.tag}</Text>
-              </View>
+
+              {item.kind === "intro" ? (
+                <>
+                  <Text style={styles.emoji}>{item.emoji}</Text>
+                  <Text style={[styles.slideTitle, { color: colors.text }]}>{item.title}</Text>
+                  <Text style={[styles.slideDesc, { color: colors.textSecondary }]}>{item.desc}</Text>
+                  <View style={[styles.tag, { backgroundColor: colors.primarySoft }]}>
+                    <Ionicons name="sparkles" size={14} color={colors.primary} />
+                    <Text style={[styles.tagText, { color: colors.primary }]}>{item.tag}</Text>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <Text style={[styles.slideTitle, { color: colors.text, marginTop: spacing.md }]}>
+                    {item.title}
+                  </Text>
+                  <Text style={[styles.slideDesc, { color: colors.textSecondary }]}>{item.desc}</Text>
+                  <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
+                    {PERSONAS.map((p) => {
+                      const active = picked === p.id;
+                      return (
+                        <PressableScale key={p.id} onPress={() => pick(p.id)}>
+                          <View
+                            style={[
+                              styles.personaCard,
+                              {
+                                backgroundColor: active ? colors.primarySoft : colors.background,
+                                borderColor: active ? colors.primary : colors.border,
+                              },
+                            ]}
+                          >
+                            <Text style={styles.personaEmoji}>{p.emoji}</Text>
+                            <View style={{ flex: 1, gap: 3 }}>
+                              <Text style={[styles.personaName, { color: colors.text }]}>
+                                {p.name}
+                              </Text>
+                              <Text
+                                style={[styles.personaSample, { color: colors.textSecondary }]}
+                                numberOfLines={2}
+                              >
+                                “{p.sample}”
+                              </Text>
+                            </View>
+                            {active && (
+                              <Ionicons name="checkmark-circle" size={22} color={colors.primary} />
+                            )}
+                          </View>
+                        </PressableScale>
+                      );
+                    })}
+                  </View>
+                </>
+              )}
             </View>
           </View>
         )}
@@ -145,9 +233,10 @@ const styles = StyleSheet.create({
   poster: {
     minHeight: 460,
     borderRadius: radius.xl,
-    padding: spacing.xl,
+    padding: spacing.lg,
     justifyContent: "center",
     gap: spacing.md,
+    overflow: "hidden",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 18 },
     shadowOpacity: 0.08,
@@ -190,6 +279,25 @@ const styles = StyleSheet.create({
   tagText: {
     fontSize: 12,
     fontWeight: "900",
+  },
+  personaCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    borderWidth: 1.5,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  personaEmoji: {
+    fontSize: 28,
+  },
+  personaName: {
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  personaSample: {
+    fontSize: 12,
+    lineHeight: 17,
   },
   footer: {
     gap: spacing.md,

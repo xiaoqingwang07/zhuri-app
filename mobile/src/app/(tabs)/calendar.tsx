@@ -1,13 +1,24 @@
-import React, { useMemo, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import * as Sharing from "expo-sharing";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { captureRef } from "react-native-view-shot";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Button, Card, Chip, SectionTitle } from "@/components/ui";
+import {
+  FOOTPRINT_MIN_PHOTOS,
+  FootprintCard,
+  sampleFootprints,
+} from "@/components/FootprintCard";
+import { Button, Card, Chip, PressableScale, SectionTitle } from "@/components/ui";
 import { generateWeeklyReview, WeeklyReview } from "@/lib/ai";
 import { kvGet, kvSet } from "@/lib/db";
 import { useGoals } from "@/lib/GoalsContext";
@@ -20,13 +31,51 @@ const WEEKDAY_LABELS = ["一", "二", "三", "四", "五", "六", "日"];
 export default function CalendarScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { goals } = useGoals();
+  const { goals, persona } = useGoals();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [review, setReview] = useState<WeeklyReview | null>(null);
   const [reviewing, setReviewing] = useState(false);
+  const [zoomPhoto, setZoomPhoto] = useState<string | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const cardRef = useRef<View>(null);
 
   const today = todayStr();
   const goal = goals.find((g) => g.id === selectedId) || goals[0];
+
+  // 足迹按当前目标筛选：分享卡要有明确主题，混着多个目标的照片讲不出故事
+  const footprints = useMemo(
+    () =>
+      goal
+        ? goal.tasks
+            .filter((t) => t.proofUri && t.completed)
+            .map((t) => ({ uri: t.proofUri as string, day: t.day }))
+            .sort((a, b) => b.day - a.day)
+        : [],
+    [goal]
+  );
+  const shareablePhotos = useMemo(() => sampleFootprints(footprints), [footprints]);
+
+  const handleShareFootprints = useCallback(async () => {
+    if (!cardRef.current) return;
+    setSharing(true);
+    try {
+      // 等一帧，确保九宫格里的图片都已经画上去再截图
+      await new Promise((r) => setTimeout(r, 350));
+      const uri = await captureRef(cardRef, { format: "png", quality: 1 });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          mimeType: "image/png",
+          dialogTitle: "分享我的足迹",
+        });
+      }
+      setShareOpen(false);
+    } catch {
+      Alert.alert("生成失败", "请稍后再试。");
+    } finally {
+      setSharing(false);
+    }
+  }, []);
 
   const taskByDate = useMemo(() => {
     const map = new Map<string, { completed: boolean }>();
@@ -89,8 +138,8 @@ export default function CalendarScreen() {
       Alert.alert("还没有目标", "先创建一个目标再来复盘吧。");
       return;
     }
-    // 缓存：每周只生成一次
-    const weekKey = `review_${today.slice(0, 8)}w${Math.ceil(parseDate(today).getDate() / 7)}`;
+    // 缓存：每周每种人格各生成一次（换人格要能听到新语气）
+    const weekKey = `review_${today.slice(0, 8)}w${Math.ceil(parseDate(today).getDate() / 7)}_${persona}`;
     const cached = kvGet(weekKey);
     if (cached) {
       setReview(JSON.parse(cached));
@@ -98,7 +147,7 @@ export default function CalendarScreen() {
     }
     setReviewing(true);
     try {
-      const result = await generateWeeklyReview(goals);
+      const result = await generateWeeklyReview(goals, persona);
       kvSet(weekKey, JSON.stringify(result));
       setReview(result);
     } catch {
@@ -112,13 +161,13 @@ export default function CalendarScreen() {
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={{
-        paddingTop: insets.top + spacing.md,
+        paddingTop: insets.top + spacing.sm,
         paddingHorizontal: spacing.md,
-        paddingBottom: 120,
+        paddingBottom: spacing.lg,
         gap: spacing.md,
       }}
     >
-      <Text style={[styles.title, { color: colors.text }]}>复盘</Text>
+      <Text style={[styles.title, { color: colors.textSecondary }]}>复盘</Text>
 
       {goals.length === 0 ? (
         <Card style={{ alignItems: "center", paddingVertical: spacing.xl, gap: spacing.sm }}>
@@ -223,6 +272,47 @@ export default function CalendarScreen() {
             </View>
           )}
 
+          {footprints.length > 0 && (
+            <View>
+              <View style={styles.footprintHeader}>
+                <SectionTitle style={{ marginBottom: 0 }}>
+                  足迹 {footprints.length} 张
+                </SectionTitle>
+                {footprints.length >= FOOTPRINT_MIN_PHOTOS && (
+                  <PressableScale onPress={() => setShareOpen(true)}>
+                    <View style={[styles.shareChip, { backgroundColor: colors.primarySoft }]}>
+                      <Ionicons name="share-outline" size={13} color={colors.primary} />
+                      <Text style={[styles.shareChipText, { color: colors.primary }]}>
+                        做成一张图
+                      </Text>
+                    </View>
+                  </PressableScale>
+                )}
+              </View>
+              <Card>
+                <View style={styles.photoGrid}>
+                  {footprints.slice(0, 12).map((f) => (
+                    <PressableScale
+                      key={f.uri}
+                      onPress={() => setZoomPhoto(f.uri)}
+                      style={styles.photoCell}
+                    >
+                      <Image source={{ uri: f.uri }} style={styles.photo} contentFit="cover" />
+                      <View style={[styles.photoDay, { backgroundColor: colors.overlay }]}>
+                        <Text style={styles.photoDayText}>D{f.day}</Text>
+                      </View>
+                    </PressableScale>
+                  ))}
+                </View>
+                {footprints.length > 12 && (
+                  <Text style={[styles.photoMore, { color: colors.textTertiary }]}>
+                    还有 {footprints.length - 12} 张
+                  </Text>
+                )}
+              </Card>
+            </View>
+          )}
+
           {/* 近 7 天 */}
           <View>
             <SectionTitle>近 7 天</SectionTitle>
@@ -299,14 +389,65 @@ export default function CalendarScreen() {
           </View>
         </>
       )}
+
+      <Modal
+        visible={shareOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShareOpen(false)}
+      >
+        <View style={[styles.shareBackdrop, { backgroundColor: colors.overlay }]}>
+          <View style={styles.shareCardWrap}>
+            {goal && (
+              <FootprintCard
+                ref={cardRef}
+                goalName={goal.name}
+                totalDays={goal.totalDays}
+                photos={shareablePhotos}
+              />
+            )}
+          </View>
+          <View style={styles.shareActions}>
+            <Button
+              title="取消"
+              variant="ghost"
+              onPress={() => setShareOpen(false)}
+              style={{ flex: 1 }}
+              textStyle={{ color: "#FFFFFF" }}
+            />
+            <Button
+              title="分享这张图"
+              onPress={handleShareFootprints}
+              loading={sharing}
+              style={{ flex: 2 }}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={!!zoomPhoto}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setZoomPhoto(null)}
+      >
+        <Pressable
+          style={[styles.zoomBackdrop, { backgroundColor: "rgba(0,0,0,0.92)" }]}
+          onPress={() => setZoomPhoto(null)}
+        >
+          {!!zoomPhoto && (
+            <Image source={{ uri: zoomPhoto }} style={styles.zoomImage} contentFit="contain" />
+          )}
+        </Pressable>
+      </Modal>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   title: {
-    fontSize: 32,
-    fontWeight: "800",
+    fontSize: 14,
+    fontWeight: "600",
   },
   chipRow: {
     flexDirection: "row",
@@ -366,6 +507,82 @@ const styles = StyleSheet.create({
   barFill: {
     width: "100%",
     borderRadius: 8,
+  },
+  footprintHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  shareChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  shareChipText: {
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  shareBackdrop: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacing.lg,
+    gap: spacing.lg,
+  },
+  shareCardWrap: {
+    borderRadius: 18,
+    overflow: "hidden",
+  },
+  shareActions: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    alignSelf: "stretch",
+  },
+  photoGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  photoCell: {
+    width: "31.7%",
+    aspectRatio: 1,
+    borderRadius: 10,
+    overflow: "hidden",
+  },
+  photo: {
+    width: "100%",
+    height: "100%",
+  },
+  photoDay: {
+    position: "absolute",
+    left: 5,
+    bottom: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  photoDayText: {
+    color: "#FFF",
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  photoMore: {
+    fontSize: 12,
+    textAlign: "center",
+    marginTop: 8,
+  },
+  zoomBackdrop: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  zoomImage: {
+    width: "100%",
+    height: "80%",
   },
   reviewSub: {
     fontSize: 13,

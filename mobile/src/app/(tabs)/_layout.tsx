@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
+import { StyleSheet } from "react-native";
 import { useTheme } from "@/theme/useTheme";
 
 export default function TabsLayout() {
@@ -11,23 +12,15 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textTertiary,
+        // 贴底而非悬浮：悬浮式（absolute + margin）会让页面内容从 tab bar 下方穿出来，
+        // 而且底部永远差一截对不齐。交给系统按安全区排版最稳。
         tabBarStyle: {
           backgroundColor: colors.card,
           borderTopColor: colors.border,
-          height: 84,
-          paddingTop: 8,
-          paddingBottom: 18,
-          marginHorizontal: 14,
-          marginBottom: 10,
-          borderRadius: 20,
-          position: "absolute",
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 10 },
-          shadowOpacity: 0.08,
-          shadowRadius: 24,
-          elevation: 8,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          paddingTop: 6,
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: "900" },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: "700" },
       }}
     >
       <Tabs.Screen

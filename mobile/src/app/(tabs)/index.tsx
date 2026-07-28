@@ -1,5 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import { Redirect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -11,18 +13,15 @@ import {
   TextInput,
   View,
 } from "react-native";
-import Animated, {
-  Easing,
-  FadeInDown,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-} from "react-native-reanimated";
+import Animated, { FadeInDown, ZoomIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BadgeModal } from "@/components/BadgeModal";
 import { Confetti } from "@/components/Confetti";
+import { SunDial } from "@/components/SunDial";
 import { Button, Card, PressableScale, ProgressBar } from "@/components/ui";
+import { goalPhase, sunStateFor } from "@/lib/sunState";
+import { assessPace, shouldOfferChallenge } from "@/lib/paceSignal";
+import { deleteProofPhoto, pickProofPhoto } from "@/lib/proofPhoto";
 import { fallbackCoachMessage, generateCoachMessage } from "@/lib/ai";
 import { kvGet, kvSet } from "@/lib/db";
 import { rescheduleReminders } from "@/lib/notifications";
@@ -58,10 +57,6 @@ function difficultyLabel(goal: Goal): string {
   return "标准";
 }
 
-function clampPercent(value: number) {
-  return Math.max(0, Math.min(100, Math.round(value * 100)));
-}
-
 const FEEDBACK_MINUTES = [10, 20, 30, 45, 60];
 const FEEDBACK_DIFFICULTIES: {
   id: CheckInFeedback["difficulty"];
@@ -73,62 +68,26 @@ const FEEDBACK_DIFFICULTIES: {
   { id: "too_easy", label: "偏轻", next: "harder" },
 ];
 
-function TodayProgressDial({
-  progress,
-  done,
-}: {
-  progress: number;
-  done: boolean;
-}) {
-  const { colors } = useTheme();
-  const pulse = useSharedValue(0);
-
-  useEffect(() => {
-    pulse.value = withRepeat(
-      withTiming(1, { duration: 1800, easing: Easing.inOut(Easing.quad) }),
-      -1,
-      true
-    );
-  }, [pulse]);
-
-  const haloStyle = useAnimatedStyle(() => ({
-    opacity: done ? 0.22 : 0.08 + pulse.value * 0.16,
-    transform: [{ scale: 0.96 + pulse.value * 0.08 }],
-  }));
-
-  return (
-    <View style={styles.dialWrap}>
-      <Animated.View
-        style={[
-          styles.dialHalo,
-          { backgroundColor: done ? colors.success : colors.primary },
-          haloStyle,
-        ]}
-      />
-      <View style={[styles.dial, { borderColor: done ? colors.success : colors.primary }]}>
-        <Text style={[styles.dialValue, { color: colors.text }]}>
-          {clampPercent(progress)}
-        </Text>
-        <Text style={[styles.dialUnit, { color: colors.textTertiary }]}>%</Text>
-      </View>
-    </View>
-  );
-}
-
 export default function TodayScreen() {
-  const { colors } = useTheme();
+  const { colors, gradients, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { activeGoals, goals, checkIn, persona } = useGoals();
+  const { activeGoals, goals, checkIn, persona, adjustPlan, updateGoal } = useGoals();
   const [showConfetti, setShowConfetti] = useState(false);
   const [unlockedBadge, setUnlockedBadge] = useState<Badge | null>(null);
   const [, setCoachVersion] = useState(0);
-  const [needsOnboarding] = useState(() => kvGet("onboarding_done") !== "1");
+  // 每次渲染都读最新值：完成引导后返回时立即生效，避免 stale state 把用户弹回引导页
+  const needsOnboarding = kvGet("onboarding_done") !== "1";
   const [feedbackGoal, setFeedbackGoal] = useState<Goal | null>(null);
   const [feedbackMinutes, setFeedbackMinutes] = useState(30);
   const [feedbackDifficulty, setFeedbackDifficulty] =
     useState<CheckInFeedback["difficulty"]>("just_right");
   const [feedbackBlocker, setFeedbackBlocker] = useState("");
+  const [didChallenge, setDidChallenge] = useState(false);
+  const [calibrating, setCalibrating] = useState(false);
+  const [proofUri, setProofUri] = useState<string | null>(null);
+  const [pickingPhoto, setPickingPhoto] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const today = todayStr();
   const personaInfo = PERSONAS.find((p) => p.id === persona)!;
@@ -182,7 +141,39 @@ export default function TodayScreen() {
     setFeedbackMinutes(task?.durationMinutes || goal.profile?.dailyMinutes || 30);
     setFeedbackDifficulty("just_right");
     setFeedbackBlocker("");
+    setDidChallenge(false);
+    setProofUri(null);
+    setMoreOpen(false);
   }, []);
+
+  const addProofPhoto = useCallback(
+    (goal: Goal) => {
+      const idx = todayTaskIndex(goal);
+      const day = idx !== -1 ? goal.tasks[idx].day : goal.currentDay;
+      const run = async (source: "camera" | "library") => {
+        setPickingPhoto(true);
+        try {
+          const uri = await pickProofPhoto(source, goal.id, day);
+          if (uri) {
+            // 换照片时清掉上一张，避免沙盒里留下孤儿文件
+            if (proofUri) deleteProofPhoto(proofUri);
+            setProofUri(uri);
+            Haptics.selectionAsync().catch(() => {});
+          }
+        } catch {
+          Alert.alert("加照片失败", "换一张试试，或者直接完成打卡也可以。");
+        } finally {
+          setPickingPhoto(false);
+        }
+      };
+      Alert.alert("给今天留个记录", "照片只存在这台手机上，不会上传。", [
+        { text: "取消", style: "cancel" },
+        { text: "拍一张", onPress: () => run("camera") },
+        { text: "从相册选", onPress: () => run("library") },
+      ]);
+    },
+    [proofUri]
+  );
 
   const submitFeedback = useCallback(
     (goal: Goal) => {
@@ -194,6 +185,8 @@ export default function TodayScreen() {
         difficulty: feedbackDifficulty,
         blocker: feedbackBlocker.trim() || undefined,
         adjustmentPreference: selected?.next || "keep",
+        challengeCompleted: didChallenge || undefined,
+        proofUri: proofUri || undefined,
       };
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       const result = checkIn(goal.id, idx, feedback);
@@ -206,8 +199,10 @@ export default function TodayScreen() {
       if (result.justCompleted) {
         setTimeout(() => {
           Alert.alert(
-            "目标达成",
-            `你完成了「${goal.name}」。去目标详情页领一张成就证书吧。`,
+            result.aheadDays > 0 ? `提前 ${result.aheadDays} 天达成` : "目标达成",
+            result.aheadDays > 0
+              ? `你把「${goal.name}」比原计划提前 ${result.aheadDays} 天做完了。去领一张成就证书吧。`
+              : `你完成了「${goal.name}」。去目标详情页领一张成就证书吧。`,
             [
               { text: "稍后", style: "cancel" },
               { text: "查看证书", onPress: () => router.push(`/goal/${goal.id}`) },
@@ -216,7 +211,44 @@ export default function TodayScreen() {
         }, 1200);
       }
     },
-    [checkIn, feedbackBlocker, feedbackDifficulty, feedbackMinutes, router]
+    [checkIn, didChallenge, feedbackBlocker, feedbackDifficulty, feedbackMinutes, proofUri, router]
+  );
+
+  // 强度校准：只提议，由用户点头才执行 —— 加码是提高难度，不能自动做主
+  const handleCalibrate = useCallback(
+    (goal: Goal, signal: "too_easy" | "too_hard") => {
+      const mode = signal === "too_easy" ? "upgrade" : "lighten";
+      const verb = signal === "too_easy" ? "加码" : "调轻";
+      Alert.alert(
+        `让陪练${verb}?`,
+        signal === "too_easy"
+          ? "会保持天数不变，把剩下的内容加深、提高标准。已完成的进度不受影响。"
+          : "会保持天数和目标不变，把剩下的难点拆得更碎、降低单日强度。",
+        [
+          {
+            text: "先不用",
+            style: "cancel",
+            onPress: () => updateGoal({ ...goal, upgradeDismissedAt: today }),
+          },
+          {
+            text: `确定${verb}`,
+            onPress: async () => {
+              setCalibrating(true);
+              try {
+                const message = await adjustPlan(goal.id, mode);
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                Alert.alert("计划已校准", message);
+              } catch {
+                Alert.alert("校准失败", "陪练暂时不可用，请稍后再试。");
+              } finally {
+                setCalibrating(false);
+              }
+            },
+          },
+        ]
+      );
+    },
+    [adjustPlan, today, updateGoal]
   );
 
   const handleAddGoal = useCallback(() => {
@@ -252,6 +284,29 @@ export default function TodayScreen() {
   const primaryMissed = primaryGoal ? missedDays(primaryGoal) : 0;
   const primaryRate = primaryGoal ? completionRate(primaryGoal) : 0;
   const doneToday = primaryTodayIdx !== -1 ? !!primaryGoal?.tasks[primaryTodayIdx]?.completed : false;
+  const tomorrowTask =
+    doneToday && primaryTodayIdx !== -1 ? primaryGoal?.tasks[primaryTodayIdx + 1] : null;
+  const sun = sunStateFor(primaryGoal ? goalPhase(primaryGoal) : "dawn", isDark);
+  const pace = primaryGoal ? assessPace(primaryGoal) : null;
+  const feedbackPlannedMinutes = feedbackGoal
+    ? (() => {
+        const idx = todayTaskIndex(feedbackGoal);
+        const task = idx !== -1 ? feedbackGoal.tasks[idx] : null;
+        return task?.durationMinutes || feedbackGoal.profile?.dailyMinutes || 30;
+      })()
+    : 30;
+  const feedbackChallenge = feedbackGoal
+    ? (() => {
+        const idx = todayTaskIndex(feedbackGoal);
+        const task = idx !== -1 ? feedbackGoal.tasks[idx] : null;
+        const challenge = task?.challengeTask?.trim();
+        // 挑战版和主任务相同时没有意义（AI 兜底会把两者填成一样）
+        return challenge && challenge !== task?.task?.trim() ? challenge : null;
+      })()
+    : null;
+  const offerChallenge =
+    !!feedbackChallenge &&
+    shouldOfferChallenge(feedbackPlannedMinutes, feedbackMinutes, feedbackDifficulty);
   const unfinishedGoals = activeGoals.filter((g) => {
     const todayIdx = todayTaskIndex(g);
     if (todayIdx !== -1) return !g.tasks[todayIdx].completed;
@@ -263,30 +318,34 @@ export default function TodayScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <ScrollView
         contentContainerStyle={{
-          paddingTop: insets.top + spacing.md,
+          paddingTop: insets.top + spacing.sm,
           paddingHorizontal: spacing.md,
-          paddingBottom: 120,
+          paddingBottom: spacing.lg,
           gap: spacing.md,
         }}
       >
+        {/* App 名不必在 App 内重复出现，日期和加号一行就够 */}
         <View style={styles.header}>
-          <View>
-            <Text style={[styles.date, { color: colors.textSecondary }]}>
-              {formatChineseDate(today)} · {weekdayName(today)}
-            </Text>
-            <Text style={[styles.title, { color: colors.text }]}>逐日</Text>
-          </View>
+          <Text style={[styles.date, { color: colors.textSecondary }]}>
+            {formatChineseDate(today)} · {weekdayName(today)}
+          </Text>
           <PressableScale
             onPress={handleAddGoal}
             style={[styles.addButton, { backgroundColor: colors.primary }]}
           >
-            <Ionicons name="add" size={28} color="#FFF" />
+            <Ionicons name="add" size={20} color="#FFF" />
           </PressableScale>
         </View>
 
         {activeGoals.length === 0 && (
           <Animated.View entering={FadeInDown.springify()}>
             <Card style={styles.emptyCard}>
+              <LinearGradient
+                colors={gradients.sunrise}
+                start={{ x: 0.5, y: 0 }}
+                end={{ x: 0.5, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
               <Text style={styles.emptyEmoji}>🌤️</Text>
               <Text style={[styles.emptyTitle, { color: colors.text }]}>
                 给一个目标，逐日帮你接住每天。
@@ -306,7 +365,18 @@ export default function TodayScreen() {
         {primaryGoal && primaryTask && (
           <Animated.View entering={FadeInDown.springify()}>
             <Card style={[styles.heroCard, { backgroundColor: colors.card }]}>
-              <View style={[styles.heroAccent, { backgroundColor: doneToday ? colors.successSoft : colors.primarySoft }]} />
+              <LinearGradient
+                colors={
+                  sun.phase === "night" || sun.phase === "dusk"
+                    ? [`${sun.sky[1]}55`, `${sun.sky[1]}18`, "transparent"]
+                    : doneToday
+                      ? gradients.sunriseDone
+                      : gradients.sunrise
+                }
+                start={{ x: 0.15, y: 0 }}
+                end={{ x: 0.55, y: 0.9 }}
+                style={StyleSheet.absoluteFill}
+              />
               <View style={styles.heroTop}>
                 <View style={{ flex: 1 }}>
                   <View style={styles.kickerRow}>
@@ -314,15 +384,31 @@ export default function TodayScreen() {
                     <Text style={[styles.greeting, { color: colors.textSecondary }]}>{greeting()}</Text>
                   </View>
                   <Text style={[styles.heroTitle, { color: colors.text }]} numberOfLines={2}>
-                    {doneToday ? "今天已经接住了" : primaryGoal.name}
+                    {doneToday ? sun.title : primaryGoal.name}
                   </Text>
-                  <Text style={[styles.heroSubline, { color: colors.textTertiary }]}>
-                    {doneToday
-                      ? "完成感已经入账，明天继续。"
-                      : `先做 ${primaryTask.minimumTask ? "最低版" : "10 分钟"}，把节奏保住。`}
-                  </Text>
+                  {doneToday ? (
+                    <View style={styles.doneMetaRow}>
+                      <Animated.View
+                        entering={ZoomIn.springify().damping(12).delay(200)}
+                        style={[styles.streakChip, { backgroundColor: colors.successSoft }]}
+                      >
+                        <Text style={[styles.streakChipText, { color: colors.success }]}>
+                          🔥 连续 {primaryGoal.streak} 天
+                        </Text>
+                      </Animated.View>
+                      <Text style={[styles.heroSubline, { color: colors.textTertiary }]}>
+                        完成感已入账
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={[styles.heroSubline, { color: colors.textTertiary }]}>
+                      {sun.phase === "night" || sun.phase === "dusk"
+                        ? sun.line
+                        : `先做 ${primaryTask.minimumTask ? "最低版" : "10 分钟"}，把节奏保住。`}
+                    </Text>
+                  )}
                 </View>
-                <TodayProgressDial progress={primaryRate} done={doneToday} />
+                <SunDial state={sun} progress={primaryRate} />
               </View>
 
               <View style={styles.statsStrip}>
@@ -387,7 +473,7 @@ export default function TodayScreen() {
                   {primaryTask.task}
                 </Text>
 
-                {(primaryTask.focus || primaryTask.successCheck) && (
+                {!doneToday && (primaryTask.focus || primaryTask.successCheck) && (
                   <View style={[styles.focusBox, { backgroundColor: colors.card }]}>
                     {!!primaryTask.focus && (
                       <Text style={[styles.focusText, { color: colors.primary }]}>
@@ -413,7 +499,70 @@ export default function TodayScreen() {
                     </Text>
                   </View>
                 )}
+
+                {doneToday && tomorrowTask && (
+                  <View style={[styles.tomorrowRow, { borderTopColor: colors.border }]}>
+                    <Text
+                      style={[
+                        styles.tomorrowLabel,
+                        { color: colors.primary, backgroundColor: colors.primarySoft },
+                      ]}
+                    >
+                      明天
+                    </Text>
+                    <Text
+                      style={[styles.tomorrowText, { color: colors.textSecondary }]}
+                      numberOfLines={1}
+                    >
+                      {tomorrowTask.task}
+                    </Text>
+                  </View>
+                )}
               </View>
+
+              {pace && pace.signal !== "none" && (
+                <PressableScale
+                  onPress={() => handleCalibrate(primaryGoal, pace.signal as "too_easy" | "too_hard")}
+                  disabled={calibrating}
+                  style={[
+                    styles.paceBanner,
+                    {
+                      backgroundColor:
+                        pace.signal === "too_easy" ? colors.successSoft : colors.warningSoft,
+                      opacity: calibrating ? 0.6 : 1,
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.rescueIcon,
+                      {
+                        backgroundColor:
+                          pace.signal === "too_easy" ? colors.success : colors.warning,
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name={pace.signal === "too_easy" ? "trending-up" : "trending-down"}
+                      size={16}
+                      color="#FFF"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.rescueTitle, { color: colors.text }]}>{pace.title}</Text>
+                    <Text style={[styles.rescueDesc, { color: colors.textSecondary }]}>
+                      {calibrating ? "陪练正在重排剩余计划…" : pace.detail}
+                    </Text>
+                  </View>
+                  {!calibrating && (
+                    <Ionicons
+                      name="chevron-forward"
+                      size={18}
+                      color={pace.signal === "too_easy" ? colors.success : colors.warning}
+                    />
+                  )}
+                </PressableScale>
+              )}
 
               {!doneToday && (
                 <View style={[styles.coachBox, { backgroundColor: colors.primarySoft }]}>
@@ -538,53 +687,64 @@ export default function TodayScreen() {
               </PressableScale>
             </View>
 
-            <View style={{ gap: spacing.sm }}>
-              <Text style={[styles.feedbackLabel, { color: colors.text }]}>实际用了多久？</Text>
-              <View style={styles.feedbackChips}>
+            {/* 用时和难度并成一行标签 + 一行选项，打卡三秒结束 */}
+            <View style={styles.quickRow}>
+              <Text style={[styles.quickLabel, { color: colors.textTertiary }]}>用时</Text>
+              <View style={styles.quickChips}>
                 {FEEDBACK_MINUTES.map((minute) => (
                   <PressableScale
                     key={minute}
                     onPress={() => setFeedbackMinutes(minute)}
                     style={[
-                      styles.feedbackChip,
+                      styles.quickChip,
                       {
-                        backgroundColor: feedbackMinutes === minute ? colors.primary : colors.background,
-                        borderColor: feedbackMinutes === minute ? colors.primary : colors.border,
+                        backgroundColor:
+                          feedbackMinutes === minute ? colors.primary : colors.background,
+                        borderColor:
+                          feedbackMinutes === minute ? colors.primary : colors.border,
                       },
                     ]}
                   >
                     <Text
                       style={[
-                        styles.feedbackChipText,
+                        styles.quickChipText,
                         { color: feedbackMinutes === minute ? "#FFF" : colors.textSecondary },
                       ]}
                     >
-                      {minute} 分钟
+                      {minute}
                     </Text>
                   </PressableScale>
                 ))}
+                <Text style={[styles.quickUnit, { color: colors.textTertiary }]}>分钟</Text>
               </View>
             </View>
 
-            <View style={{ gap: spacing.sm }}>
-              <Text style={[styles.feedbackLabel, { color: colors.text }]}>今天难度怎么样？</Text>
-              <View style={styles.feedbackChips}>
+            <View style={styles.quickRow}>
+              <Text style={[styles.quickLabel, { color: colors.textTertiary }]}>难度</Text>
+              <View style={styles.quickChips}>
                 {FEEDBACK_DIFFICULTIES.map((item) => (
                   <PressableScale
                     key={item.id}
                     onPress={() => setFeedbackDifficulty(item.id)}
                     style={[
-                      styles.feedbackChip,
+                      styles.quickChip,
                       {
-                        backgroundColor: feedbackDifficulty === item.id ? colors.primarySoft : colors.background,
-                        borderColor: feedbackDifficulty === item.id ? colors.primary : colors.border,
+                        backgroundColor:
+                          feedbackDifficulty === item.id ? colors.primarySoft : colors.background,
+                        borderColor:
+                          feedbackDifficulty === item.id ? colors.primary : colors.border,
                       },
                     ]}
                   >
                     <Text
                       style={[
-                        styles.feedbackChipText,
-                        { color: feedbackDifficulty === item.id ? colors.primary : colors.textSecondary },
+                        styles.quickChipText,
+                        {
+                          color:
+                            feedbackDifficulty === item.id
+                              ? colors.primary
+                              : colors.textSecondary,
+                        },
                       ]}
                     >
                       {item.label}
@@ -594,23 +754,122 @@ export default function TodayScreen() {
               </View>
             </View>
 
-            <TextInput
-              value={feedbackBlocker}
-              onChangeText={setFeedbackBlocker}
-              placeholder="卡在哪里？可不填"
-              placeholderTextColor={colors.textTertiary}
-              style={[
-                styles.feedbackInput,
-                {
-                  backgroundColor: colors.background,
-                  borderColor: colors.border,
-                  color: colors.text,
-                },
-              ]}
-            />
+            {/* 照片、卡点这些都是可选的，默认收起来，别让人一打开就觉得要填一堆 */}
+            {!moreOpen && (
+              <PressableScale onPress={() => setMoreOpen(true)}>
+                <View style={styles.moreToggle}>
+                  <Ionicons
+                    name={offerChallenge ? "flame-outline" : "add-circle-outline"}
+                    size={15}
+                    color={offerChallenge ? colors.primary : colors.textTertiary}
+                  />
+                  <Text
+                    style={[
+                      styles.moreToggleText,
+                      { color: offerChallenge ? colors.primary : colors.textTertiary },
+                    ]}
+                  >
+                    {offerChallenge ? "还有余力？看看今天的挑战版" : "加张照片 / 记一句卡点"}
+                  </Text>
+                </View>
+              </PressableScale>
+            )}
+
+            {moreOpen && offerChallenge && (
+              <Animated.View entering={FadeInDown.springify()}>
+                <PressableScale
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setDidChallenge((v) => !v);
+                  }}
+                >
+                  <View
+                    style={[
+                      styles.challengeBox,
+                      {
+                        backgroundColor: didChallenge ? colors.successSoft : colors.background,
+                        borderColor: didChallenge ? colors.success : colors.border,
+                      },
+                    ]}
+                  >
+                    <View style={styles.challengeHeader}>
+                      <Ionicons
+                        name={didChallenge ? "checkmark-circle" : "flame-outline"}
+                        size={16}
+                        color={didChallenge ? colors.success : colors.primary}
+                      />
+                      <Text
+                        style={[
+                          styles.challengeLabel,
+                          { color: didChallenge ? colors.success : colors.primary },
+                        ]}
+                      >
+                        {didChallenge ? "挑战版已完成" : "还有余力？今天的挑战版"}
+                      </Text>
+                    </View>
+                    <Text style={[styles.challengeText, { color: colors.text }]}>
+                      {feedbackChallenge}
+                    </Text>
+                    {!didChallenge && (
+                      <Text style={[styles.challengeHint, { color: colors.textTertiary }]}>
+                        做完再点这里，不做也完全没问题
+                      </Text>
+                    )}
+                  </View>
+                </PressableScale>
+              </Animated.View>
+            )}
+
+            {proofUri ? (
+              <View style={styles.proofWrap}>
+                <Image source={{ uri: proofUri }} style={styles.proofImage} contentFit="cover" />
+                <PressableScale
+                  onPress={() => {
+                    deleteProofPhoto(proofUri);
+                    setProofUri(null);
+                  }}
+                  style={[styles.proofRemove, { backgroundColor: colors.overlay }]}
+                >
+                  <Ionicons name="close" size={16} color="#FFF" />
+                </PressableScale>
+              </View>
+            ) : (
+              moreOpen && (
+                <PressableScale
+                  onPress={() => feedbackGoal && addProofPhoto(feedbackGoal)}
+                  disabled={pickingPhoto}
+                  style={[
+                    styles.proofAdd,
+                    { borderColor: colors.border, backgroundColor: colors.background },
+                  ]}
+                >
+                  <Ionicons name="camera-outline" size={18} color={colors.textSecondary} />
+                  <Text style={[styles.proofAddText, { color: colors.textSecondary }]}>
+                    {pickingPhoto ? "处理中…" : "加张照片"}
+                  </Text>
+                </PressableScale>
+              )
+            )}
+
+            {moreOpen && (
+              <TextInput
+                value={feedbackBlocker}
+                onChangeText={setFeedbackBlocker}
+                placeholder="卡在哪里？可不填"
+                placeholderTextColor={colors.textTertiary}
+                style={[
+                  styles.feedbackInput,
+                  {
+                    backgroundColor: colors.background,
+                    borderColor: colors.border,
+                    color: colors.text,
+                  },
+                ]}
+              />
+            )}
 
             <Button
-              title="完成记录"
+              title="完成打卡"
               onPress={() => feedbackGoal && submitFeedback(feedbackGoal)}
             />
           </View>
@@ -625,21 +884,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: spacing.xs,
   },
   date: {
     fontSize: 14,
     fontWeight: "600",
-    marginBottom: 2,
-  },
-  title: {
-    fontSize: 34,
-    fontWeight: "900",
   },
   addButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -647,6 +900,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
     paddingVertical: spacing.xl,
+    overflow: "hidden",
   },
   emptyEmoji: {
     fontSize: 64,
@@ -668,16 +922,6 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     overflow: "hidden",
   },
-  heroAccent: {
-    position: "absolute",
-    top: -44,
-    right: -34,
-    width: 170,
-    height: 170,
-    borderRadius: 38,
-    transform: [{ rotate: "18deg" }],
-    opacity: 0.9,
-  },
   heroTop: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -694,8 +938,8 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   greeting: {
-    fontSize: 14,
-    fontWeight: "900",
+    fontSize: 13,
+    fontWeight: "700",
   },
   heroTitle: {
     fontSize: 31,
@@ -707,37 +951,43 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     marginTop: 8,
-    fontWeight: "700",
+    fontWeight: "500",
   },
-  dialWrap: {
-    width: 92,
-    height: 92,
+  doneMetaRow: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: spacing.sm,
+    marginTop: 8,
   },
-  dialHalo: {
-    position: "absolute",
-    width: 92,
-    height: 92,
-    borderRadius: 46,
+  streakChip: {
+    borderRadius: radius.full,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
-  dial: {
-    width: 74,
-    height: 74,
-    borderRadius: 37,
-    borderWidth: 3,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.72)",
-  },
-  dialValue: {
-    fontSize: 24,
+  streakChipText: {
+    fontSize: 13,
     fontWeight: "900",
   },
-  dialUnit: {
-    fontSize: 10,
+  tomorrowRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: spacing.sm,
+    marginTop: 2,
+  },
+  tomorrowLabel: {
+    fontSize: 11,
     fontWeight: "900",
-    marginTop: -2,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    overflow: "hidden",
+  },
+  tomorrowText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "500",
   },
   statsStrip: {
     flexDirection: "row",
@@ -752,11 +1002,13 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: 10,
-    fontWeight: "900",
+    fontWeight: "800",
+    letterSpacing: 1,
   },
   statValue: {
     fontSize: 14,
-    fontWeight: "900",
+    fontWeight: "800",
+    fontVariant: ["tabular-nums"],
   },
   rescueBanner: {
     flexDirection: "row",
@@ -764,6 +1016,69 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderRadius: radius.lg,
     padding: spacing.md,
+  },
+  paceBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  challengeBox: {
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    padding: spacing.sm,
+    gap: 6,
+  },
+  challengeHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  challengeLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  challengeText: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "600",
+  },
+  challengeHint: {
+    fontSize: 11,
+  },
+  proofAdd: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    minHeight: 48,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderStyle: "dashed",
+  },
+  proofAddText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  proofWrap: {
+    height: 160,
+    borderRadius: radius.md,
+    overflow: "hidden",
+  },
+  proofImage: {
+    width: "100%",
+    height: "100%",
+  },
+  proofRemove: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
   },
   rescueIcon: {
     width: 30,
@@ -793,7 +1108,8 @@ const styles = StyleSheet.create({
   },
   panelLabel: {
     fontSize: 12,
-    fontWeight: "900",
+    fontWeight: "800",
+    letterSpacing: 0.5,
   },
   durationTag: {
     fontSize: 11,
@@ -806,7 +1122,7 @@ const styles = StyleSheet.create({
   taskText: {
     fontSize: 20,
     lineHeight: 28,
-    fontWeight: "900",
+    fontWeight: "800",
   },
   focusBox: {
     borderRadius: radius.md,
@@ -816,12 +1132,12 @@ const styles = StyleSheet.create({
   focusText: {
     fontSize: 12,
     lineHeight: 17,
-    fontWeight: "900",
+    fontWeight: "800",
   },
   checkText: {
     fontSize: 12,
     lineHeight: 18,
-    fontWeight: "700",
+    fontWeight: "500",
   },
   minimumBox: {
     borderRadius: radius.md,
@@ -835,7 +1151,7 @@ const styles = StyleSheet.create({
   },
   minimumLabel: {
     fontSize: 12,
-    fontWeight: "900",
+    fontWeight: "800",
   },
   minimumText: {
     fontSize: 13,
@@ -855,7 +1171,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     lineHeight: 21,
-    fontWeight: "700",
+    fontWeight: "600",
   },
   actionRow: {
     flexDirection: "row",
@@ -872,7 +1188,7 @@ const styles = StyleSheet.create({
   },
   sectionMeta: {
     fontSize: 12,
-    fontWeight: "800",
+    fontWeight: "600",
   },
   smallGoalCard: {
     flexDirection: "row",
@@ -899,7 +1215,7 @@ const styles = StyleSheet.create({
   },
   smallTask: {
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "500",
   },
   quickCheck: {
     width: 42,
@@ -950,20 +1266,47 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "900",
   },
-  feedbackChips: {
+  quickRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
+    alignItems: "center",
+    gap: spacing.sm,
   },
-  feedbackChip: {
+  quickLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    width: 28,
+  },
+  quickChips: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  quickChip: {
     borderWidth: 1,
-    borderRadius: radius.full,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderRadius: radius.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    minWidth: 36,
+    alignItems: "center",
   },
-  feedbackChipText: {
+  quickChipText: {
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "700",
+  },
+  quickUnit: {
+    fontSize: 11,
+  },
+  moreToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    paddingVertical: 6,
+  },
+  moreToggleText: {
+    fontSize: 13,
+    fontWeight: "600",
   },
   feedbackInput: {
     minHeight: 46,

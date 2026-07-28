@@ -138,13 +138,13 @@ export default function SettingsScreen() {
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={{
-        paddingTop: insets.top + spacing.md,
+        paddingTop: insets.top + spacing.sm,
         paddingHorizontal: spacing.md,
-        paddingBottom: 120,
+        paddingBottom: spacing.lg,
         gap: spacing.lg,
       }}
     >
-      <Text style={[styles.title, { color: colors.text }]}>设置</Text>
+      <Text style={[styles.title, { color: colors.textSecondary }]}>设置</Text>
 
       {/* 支持卡片 */}
       <PressableScale onPress={() => router.push("/paywall")}>
@@ -370,8 +370,8 @@ function SettingsRow({
 
 const styles = StyleSheet.create({
   title: {
-    fontSize: 32,
-    fontWeight: "800",
+    fontSize: 14,
+    fontWeight: "600",
   },
   proTitle: {
     fontSize: 16,
