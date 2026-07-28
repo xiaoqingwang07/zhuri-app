@@ -1,5 +1,15 @@
 export const BRAND = "#F25F3A";
 
+/** 「逐日 = 追着太阳跑」的视觉签名：日出/日暮渐变，只用在高光时刻 */
+export interface ThemeGradients {
+  /** 首页主卡、onboarding 海报的背景晕染（上暖下融入卡片色） */
+  sunrise: [string, string, string];
+  /** 完成状态的暖金色 */
+  sunriseDone: [string, string, string];
+  /** 主按钮 */
+  cta: [string, string];
+}
+
 export interface ThemeColors {
   background: string;
   card: string;
@@ -36,6 +46,18 @@ export const lightColors: ThemeColors = {
   warning: "#D99400",
   warningSoft: "#FFF1CC",
   overlay: "rgba(0,0,0,0.4)",
+};
+
+export const lightGradients: ThemeGradients = {
+  sunrise: ["#FFDCC7", "#FFF0E3", "#FFFFFF"],
+  sunriseDone: ["#FFE9B8", "#FFF6E3", "#FFFFFF"],
+  cta: ["#FF7A4D", "#F2502A"],
+};
+
+export const darkGradients: ThemeGradients = {
+  sunrise: ["#3D2118", "#2A1D18", "#1B1918"],
+  sunriseDone: ["#3A2E14", "#2A2418", "#1B1918"],
+  cta: ["#FF7A4D", "#E84B26"],
 };
 
 export const darkColors: ThemeColors = {

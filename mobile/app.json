@@ -11,17 +11,23 @@
       "bundleIdentifier": "com.zhuri.app",
       "buildNumber": "1",
       "supportsTablet": false,
-      "icon": "./assets/images/icon.png",
+      "icon": {
+        "light": "./assets/images/icon.png",
+        "dark": "./assets/images/icon-dark.png",
+        "tinted": "./assets/images/icon-tinted.png"
+      },
       "infoPlist": {
         "CFBundleDisplayName": "逐日",
         "CFBundleDevelopmentRegion": "zh_CN",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "拍一张照片作为今天任务的完成记录。照片只保存在这台设备上，不会上传。",
+        "NSPhotoLibraryUsageDescription": "从相册选一张照片作为今天任务的完成记录。照片只保存在这台设备上，不会上传。"
       }
     },
     "android": {
       "package": "com.zhuri.app",
       "adaptiveIcon": {
-        "backgroundColor": "#FF6B35",
+        "backgroundColor": "#1E1712",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -37,18 +43,24 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#FF6B35",
+          "backgroundColor": "#F7F4EF",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 96
+          "imageWidth": 140,
+          "dark": {
+            "backgroundColor": "#12100F",
+            "image": "./assets/images/splash-icon.png",
+            "imageWidth": 140
+          }
         }
       ],
       "expo-sqlite",
       [
         "expo-notifications",
         {
-          "color": "#FF6B35"
+          "color": "#F25F3A"
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,
