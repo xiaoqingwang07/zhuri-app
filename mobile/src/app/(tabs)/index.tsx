@@ -21,6 +21,7 @@ import { Confetti } from "@/components/Confetti";
 import { SunDial } from "@/components/SunDial";
 import { Button, Card, PressableScale, ProgressBar } from "@/components/ui";
 import { goalPhase, sunStateFor } from "@/lib/sunState";
+import { track, trackOnce } from "@/lib/analytics";
 import { assessPace, shouldOfferChallenge } from "@/lib/paceSignal";
 import { deleteProofPhoto, pickProofPhoto } from "@/lib/proofPhoto";
 import { fallbackCoachMessage, generateCoachMessage } from "@/lib/ai";
@@ -193,6 +194,15 @@ export default function TodayScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       const result = checkIn(goal.id, idx, feedback);
       if (!result) return;
+      trackOnce("first_checkin");
+      track("checkin", {
+        minutes: feedbackMinutes,
+        difficulty: feedbackDifficulty,
+        photo: proofUri ? 1 : 0,
+        challenge: didChallenge ? 1 : 0,
+      });
+      if (proofUri) track("photo_added");
+      if (result.justCompleted) track("goal_completed", { ahead: result.aheadDays });
       setFeedbackGoal(null);
       setShowConfetti(true);
       if (result.newBadges.length > 0) {
@@ -237,6 +247,7 @@ export default function TodayScreen() {
             onPress: async () => {
               setCalibrating(true);
               try {
+                track("calibrate_used", { mode });
                 const message = await adjustPlan(goal.id, mode);
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                 Alert.alert("计划已校准", message);

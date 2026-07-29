@@ -4,6 +4,8 @@ import { useEffect } from "react";
 import { useColorScheme } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
+import { trackAppOpen } from "@/lib/analytics";
+import { installErrorReporting } from "@/lib/errorReport";
 import { GoalsProvider } from "@/lib/GoalsContext";
 import { initPurchases } from "@/lib/purchases";
 import { darkColors, lightColors } from "@/theme/colors";
@@ -15,7 +17,9 @@ export default function RootLayout() {
   const colors = scheme === "dark" ? darkColors : lightColors;
 
   useEffect(() => {
+    installErrorReporting();
     initPurchases().catch(() => {});
+    trackAppOpen();
     SplashScreen.hideAsync();
   }, []);
 

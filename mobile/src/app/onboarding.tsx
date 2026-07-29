@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, PressableScale } from "@/components/ui";
+import { track } from "@/lib/analytics";
 import { kvSet } from "@/lib/db";
 import { useGoals } from "@/lib/GoalsContext";
 import { PERSONAS, PersonaId } from "@/lib/types";
@@ -73,6 +74,7 @@ export default function OnboardingScreen() {
 
   const finish = () => {
     setPersona(picked);
+    track("onboarding_done", { persona: picked });
     kvSet("onboarding_done", "1");
     router.replace("/");
   };

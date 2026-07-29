@@ -1,8 +1,8 @@
-import * as Crypto from "expo-crypto";
 import { APP_TOKEN, WORKER_URL } from "./config";
-import { kvGet, kvSet } from "./db";
 import { addDays, todayStr } from "./dates";
 import { buildFallbackGoalAnalysis, enrichTaskWithDomainContext } from "./domainCoach";
+import { getDeviceId } from "./device";
+import { reportError } from "./errorReport";
 import {
   DEFAULT_GOAL_PROFILE,
   DayTask,
@@ -14,7 +14,8 @@ import {
 } from "./types";
 import { generateDefaultTasks, missedDays } from "./store";
 
-const DEVICE_ID_KEY = "device_id";
+export { getDeviceId };
+
 /**
  * 两段式生成（诊断 + 拆解）实测 50–65 秒，长周期计划更久。
  * 超时必须明显高于这个区间，否则会在临界点随机降级到本地模板。
@@ -22,15 +23,6 @@ const DEVICE_ID_KEY = "device_id";
  */
 const TIMEOUT_MS = 150000;
 const SHORT_TIMEOUT_MS = 30000;
-
-export function getDeviceId(): string {
-  let id = kvGet(DEVICE_ID_KEY);
-  if (!id) {
-    id = Crypto.randomUUID();
-    kvSet(DEVICE_ID_KEY, id);
-  }
-  return id;
-}
 
 async function callWorker<T>(
   path: string,
@@ -225,7 +217,9 @@ export async function generateTasksWithFallback(
 ): Promise<PlanGenerationResult> {
   try {
     return await generateTasksWithAI(goal, totalDays, profile, persona);
-  } catch {
+  } catch (err) {
+    // 降级到本地模板意味着用户拿到的是通才计划，这是产品质量事故，必须能被看见
+    void reportError(err, `plan_fallback_${totalDays}d`);
     return {
       tasks: generateDefaultTasks(totalDays, goal, profile),
       usedAI: false,

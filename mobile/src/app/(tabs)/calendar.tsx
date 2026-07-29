@@ -20,6 +20,7 @@ import {
 } from "@/components/FootprintCard";
 import { Button, Card, Chip, PressableScale, SectionTitle } from "@/components/ui";
 import { generateWeeklyReview, WeeklyReview } from "@/lib/ai";
+import { track } from "@/lib/analytics";
 import { kvGet, kvSet } from "@/lib/db";
 import { useGoals } from "@/lib/GoalsContext";
 import { addDays, diffDays, parseDate, toDateStr, todayStr } from "@/lib/dates";
@@ -63,6 +64,7 @@ export default function CalendarScreen() {
       // 等一帧，确保九宫格里的图片都已经画上去再截图
       await new Promise((r) => setTimeout(r, 350));
       const uri = await captureRef(cardRef, { format: "png", quality: 1 });
+      track("share_used", { photos: shareablePhotos.length });
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, {
           mimeType: "image/png",
@@ -75,7 +77,7 @@ export default function CalendarScreen() {
     } finally {
       setSharing(false);
     }
-  }, []);
+  }, [shareablePhotos.length]);
 
   const taskByDate = useMemo(() => {
     const map = new Map<string, { completed: boolean }>();

@@ -33,6 +33,7 @@ import {
   planFromDiagnosis,
   suggestDuration,
 } from "@/lib/ai";
+import { track } from "@/lib/analytics";
 import { consumeAIQuota, isProCached, remainingAIQuota } from "@/lib/entitlements";
 import { evaluateGoalFeasibility } from "@/lib/feasibility";
 import { useGoals } from "@/lib/GoalsContext";
@@ -427,6 +428,7 @@ export default function CreateGoalScreen() {
     generatingRef.current = true;
     setGoalAnalysis(null);
     setStep("loading");
+    track("goal_create_start", { days });
     try {
       // 两幕式：诊断先回来就立刻展示，用户不必对着空屏等满一分钟
       let result;
@@ -440,6 +442,10 @@ export default function CreateGoalScreen() {
         result = await generateTasksWithFallback(goal, days, profile, persona);
       }
       if (result.usedAI) consumeAIQuota();
+      track(result.usedAI ? "goal_create_success" : "goal_create_fallback", {
+        days,
+        tasks: result.tasks.length,
+      });
       setTasks(result.tasks);
       setGoalAnalysis(result.analysis);
       setUsedAI(result.usedAI);

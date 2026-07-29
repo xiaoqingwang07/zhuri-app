@@ -747,6 +747,47 @@ function normalizeDomainKey(raw: unknown): DomainKey {
 
 /* ─────────────────── 高风险领域 ─────────────────── */
 
+/**
+ * 生成结果缓存。
+ * 同一个目标 + 天数 + 画像，24 小时内直接返回上次结果：
+ * 用户反复调参重生成时秒回，也省下真金白银的 API 调用。
+ * 缓存键不含 persona —— 语气差异只影响 coachTip，不值得为它翻倍缓存量。
+ */
+async function cacheKeyFor(goal: string, days: number, profile: any): Promise<string> {
+  const raw = [
+    goal.trim().toLowerCase(),
+    days,
+    profile?.dailyMinutes || 30,
+    profile?.currentLevel || "beginner",
+    profile?.pace || "steady",
+    profile?.weekdayMode || "same",
+  ].join("|");
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
+  const hex = [...new Uint8Array(digest)]
+    .slice(0, 12)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  return `plan:${hex}`;
+}
+
+const PLAN_CACHE_TTL = 24 * 3600;
+
+/** 与客户端 analytics.ts 的事件名保持一致 */
+type EventName =
+  | "app_open"
+  | "onboarding_done"
+  | "goal_create_start"
+  | "goal_create_success"
+  | "goal_create_fallback"
+  | "first_checkin"
+  | "checkin"
+  | "rescue_used"
+  | "calibrate_used"
+  | "photo_added"
+  | "share_used"
+  | "goal_completed"
+  | "paywall_viewed";
+
 type RiskLevel = "none" | "medical" | "extreme_body" | "financial" | "legal";
 
 const RISK_LEVELS: RiskLevel[] = ["none", "medical", "extreme_body", "financial", "legal"];
@@ -964,6 +1005,141 @@ export default {
       });
     }
 
+    // --- 埋点上报（不消耗 AI 额度，也不需要 API_KEY） ---
+    if (url.pathname === "/track" && request.method === "POST") {
+      if (!deviceId) return json({ error: "Missing x-device-id header" }, 400, request);
+      try {
+        const body: any = await request.json();
+        const events = Array.isArray(body?.events) ? body.events.slice(0, 60) : [];
+        const today = new Date().toISOString().split("T")[0];
+
+        // 按天按事件累加计数，够算漏斗了
+        const counts = new Map<string, number>();
+        for (const e of events) {
+          const name = String(e?.name || "").slice(0, 40);
+          if (!name) continue;
+          counts.set(name, (counts.get(name) || 0) + 1);
+        }
+        await Promise.all(
+          [...counts.entries()].map(async ([name, n]) => {
+            const key = `stat:${today}:${name}`;
+            const prev = Number((await env.ZHURI_DB.get(key)) || "0");
+            // 统计保留 90 天足够回看，再久的数据没人会去查
+            await env.ZHURI_DB.put(key, String(prev + n), { expirationTtl: 90 * 86400 });
+          })
+        );
+
+        // 每个设备一条轻档案，用来算留存（只存日期和计数，不存任何内容）
+        const uKey = `u:${deviceId}`;
+        let profile: any = {};
+        try {
+          profile = JSON.parse((await env.ZHURI_DB.get(uKey)) || "{}");
+        } catch {
+          profile = {};
+        }
+        const activeDays: string[] = Array.isArray(profile.activeDays) ? profile.activeDays : [];
+        if (!activeDays.includes(today)) activeDays.push(today);
+        await env.ZHURI_DB.put(
+          uKey,
+          JSON.stringify({
+            firstSeen: profile.firstSeen || String(body?.firstSeen || today),
+            lastSeen: today,
+            activeDays: activeDays.slice(-60),
+            dayIndex: Number(body?.dayIndex) || 0,
+          }),
+          { expirationTtl: 180 * 86400 }
+        );
+
+        return json({ ok: true }, 200, request);
+      } catch {
+        // 埋点失败不值得让客户端重试
+        return json({ ok: false }, 200, request);
+      }
+    }
+
+    // --- 错误上报：用户那边崩了得让我知道 ---
+    if (url.pathname === "/error" && request.method === "POST") {
+      try {
+        const body: any = await request.json();
+        const message = String(body?.message || "").slice(0, 300);
+        if (message) {
+          const today = new Date().toISOString().split("T")[0];
+          // 同一条错误只累加计数，避免刷屏也方便看出哪个最高频
+          const sig = message.replace(/\d+/g, "#").slice(0, 120);
+          const key = `err:${today}:${sig}`;
+          const prev = Number((await env.ZHURI_DB.get(key)) || "0");
+          await env.ZHURI_DB.put(key, String(prev + 1), { expirationTtl: 30 * 86400 });
+          // 保留一份最近样本，含堆栈，方便定位
+          await env.ZHURI_DB.put(
+            `errlast:${today}`,
+            JSON.stringify({
+              message,
+              stack: String(body?.stack || "").slice(0, 1200),
+              context: String(body?.context || "").slice(0, 120),
+              at: new Date().toISOString(),
+            }),
+            { expirationTtl: 30 * 86400 }
+          );
+        }
+        return json({ ok: true }, 200, request);
+      } catch {
+        return json({ ok: false }, 200, request);
+      }
+    }
+
+    // --- 查看错误 ---
+    if (url.pathname === "/errors" && request.method === "GET") {
+      const days = Math.min(14, Math.max(1, Number(url.searchParams.get("days")) || 3));
+      const out: Record<string, unknown> = {};
+      const now = Date.now();
+      for (let i = 0; i < days; i++) {
+        const d = new Date(now - i * 86400000).toISOString().split("T")[0];
+        const last = await env.ZHURI_DB.get(`errlast:${d}`);
+        if (last) {
+          try {
+            out[d] = JSON.parse(last);
+          } catch {
+            out[d] = last;
+          }
+        }
+      }
+      return json({ days, lastSamples: out }, 200, request);
+    }
+
+    // --- 查看统计（带 token 即可，方便自己用浏览器看漏斗） ---
+    if (url.pathname === "/stats" && request.method === "GET") {
+      const days = Math.min(30, Math.max(1, Number(url.searchParams.get("days")) || 7));
+      const names: EventName[] = [
+        "app_open",
+        "onboarding_done",
+        "goal_create_start",
+        "goal_create_success",
+        "goal_create_fallback",
+        "first_checkin",
+        "checkin",
+        "rescue_used",
+        "calibrate_used",
+        "photo_added",
+        "share_used",
+        "goal_completed",
+        "paywall_viewed",
+      ];
+      const out: Record<string, Record<string, number>> = {};
+      const now = Date.now();
+      for (let i = 0; i < days; i++) {
+        const d = new Date(now - i * 86400000).toISOString().split("T")[0];
+        const row: Record<string, number> = {};
+        await Promise.all(
+          names.map(async (n) => {
+            const v = await env.ZHURI_DB.get(`stat:${d}:${n}`);
+            if (v) row[n] = Number(v);
+          })
+        );
+        if (Object.keys(row).length > 0) out[d] = row;
+      }
+      return json({ days, stats: out }, 200, request);
+    }
+
     if (request.method !== "POST") {
       return json({ error: "Method not allowed" }, 405, request);
     }
@@ -1160,8 +1336,34 @@ export default {
       // 生成耗时长，走保活流，否则会被 Cloudflare 断连。
       // 单段式那版的「缺 tasks 视为失败」检查已在 buildPlan 内部保留。
       return streamJSON(ctx, request, async () => {
+        const key = await cacheKeyFor(goal, Number(totalDays), profile);
+        const cached = await env.ZHURI_DB.get(key);
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached);
+            return { ...parsed, meta: { ...(parsed.meta || {}), cached: true } };
+          } catch {
+            // 缓存坏了当没有
+          }
+        }
         const analysis = await diagnoseGoal(env, goal, Number(totalDays), profile);
-        return buildPlan(env, goal, Number(totalDays), profile, persona, analysis);
+        const result: any = await buildPlan(
+          env,
+          goal,
+          Number(totalDays),
+          profile,
+          persona,
+          analysis
+        );
+        // 只缓存质量过关的结果，别把一版烂计划固化 24 小时。
+        // 这里直接 await 而不是 ctx.waitUntil：整段逻辑本身已经跑在 streamJSON 的
+        // waitUntil 里，再嵌一层不保证执行；KV 写入只有几十毫秒，等它无所谓。
+        if (result?.meta?.quality?.pass) {
+          await env.ZHURI_DB.put(key, JSON.stringify(result), {
+            expirationTtl: PLAN_CACHE_TTL,
+          }).catch(() => {});
+        }
+        return result;
       });
     } catch (error: any) {
       return json({ error: error.message }, 500, request);

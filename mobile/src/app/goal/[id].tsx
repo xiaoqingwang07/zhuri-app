@@ -18,6 +18,7 @@ import { DisclaimerCard } from "@/components/DisclaimerCard";
 import { RhythmStrip } from "@/components/RhythmStrip";
 import { Button, Card, PressableScale, ProgressBar, SectionTitle } from "@/components/ui";
 import { RescueMode } from "@/lib/ai";
+import { track } from "@/lib/analytics";
 import { isProCached } from "@/lib/entitlements";
 import { useGoals } from "@/lib/GoalsContext";
 import { todayStr } from "@/lib/dates";
@@ -74,6 +75,7 @@ export default function GoalDetailScreen() {
   const handleAdjust = async (mode: RescueMode = "steady") => {
     if (!goal) return;
     setAdjusting(true);
+    track("rescue_used", { mode, missed });
     try {
       const message = await adjustPlan(goal.id, mode);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

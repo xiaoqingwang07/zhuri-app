@@ -12,6 +12,7 @@ import {
 import type { PurchasesPackage } from "react-native-purchases";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, Card, PressableScale } from "@/components/ui";
+import { track } from "@/lib/analytics";
 import {
   getOffering,
   isPurchasesConfigured,
@@ -52,6 +53,7 @@ export default function PaywallScreen() {
   const configured = isPurchasesConfigured();
 
   useEffect(() => {
+    track("paywall_viewed");
     getOffering().then((offering) => {
       if (offering) {
         const pkgs = offering.availablePackages;
