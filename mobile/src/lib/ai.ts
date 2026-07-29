@@ -178,6 +178,44 @@ export async function generateTasksWithAI(
   return { tasks, usedAI: true, analysis, meta: data?.meta };
 }
 
+/**
+ * 只做诊断，约 20 秒返回。
+ * 拆出来是为了让用户先看到「陪练怎么理解这个目标」，而不是对着加载动画干等一分钟 ——
+ * 完整生成要 60 秒，那是首次使用最陡的流失点。
+ */
+export async function diagnoseGoal(
+  goal: string,
+  totalDays: number,
+  profile: GoalProfile = DEFAULT_GOAL_PROFILE
+): Promise<GoalAnalysis> {
+  const data = await callWorker<any>("/diagnose", { goal, totalDays, profile }, 90000);
+  return parseGoalAnalysis(data, goal, profile);
+}
+
+/** 拿着已有诊断拆解每一天 */
+export async function planFromDiagnosis(
+  goal: string,
+  totalDays: number,
+  profile: GoalProfile = DEFAULT_GOAL_PROFILE,
+  persona: PersonaId | undefined,
+  analysis: GoalAnalysis
+): Promise<PlanGenerationResult> {
+  const start = todayStr();
+  const data = await callWorker<any>("/plan", {
+    goal,
+    totalDays,
+    profile,
+    persona,
+    analysis,
+  });
+  const merged = parseGoalAnalysis({ analysis: data?.analysis || analysis }, goal, profile);
+  const tasks = parseTaskArray(data).map((t, i) =>
+    enrichTaskWithDomainContext(goal, mapToDayTask(t, i, start, profile), i, totalDays, profile, merged)
+  );
+  if (tasks.length === 0) throw new Error("AI 返回了空计划");
+  return { tasks, usedAI: true, analysis: merged, meta: data?.meta };
+}
+
 /** AI 拆解，最终失败时降级为本地模板 */
 export async function generateTasksWithFallback(
   goal: string,

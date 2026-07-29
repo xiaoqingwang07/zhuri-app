@@ -971,9 +971,12 @@ export default {
       return json({ error: "API Key not configured" }, 500, request);
     }
 
-    // 所有 AI 端点统一限流
-    const limited = await rateLimit(env, deviceId, request);
-    if (limited) return limited;
+    // AI 端点统一限流。/diagnose 是 /plan 的前置步骤，两者合起来才算一次生成，
+    // 所以只在 /plan 计数，否则拆成两步反而让用户的额度掉得快一倍。
+    if (url.pathname !== "/diagnose") {
+      const limited = await rateLimit(env, deviceId, request);
+      if (limited) return limited;
+    }
 
     let body: any;
     try {
@@ -983,6 +986,44 @@ export default {
     }
 
     try {
+      // --- 只做诊断（约 20-30 秒），让客户端先有东西可展示 ---
+      if (url.pathname === "/diagnose") {
+        const { goal, totalDays, profile } = body;
+        if (!goal || !totalDays) {
+          return json({ error: "Missing goal or totalDays" }, 400, request);
+        }
+        return streamJSON(ctx, request, async () => ({
+          analysis: await diagnoseGoal(env, goal, Number(totalDays), profile),
+        }));
+      }
+
+      // --- 拿着已有诊断拆解每一天 ---
+      if (url.pathname === "/plan") {
+        const { goal, totalDays, profile, persona, analysis } = body;
+        if (!goal || !totalDays || !analysis) {
+          return json({ error: "Missing goal / totalDays / analysis" }, 400, request);
+        }
+        // 客户端传回的诊断可能缺字段，补齐后再用，避免拆解阶段拿到 undefined
+        const safeAnalysis: Diagnosis = {
+          domainKey: normalizeDomainKey(analysis.domainKey),
+          domain: String(analysis.domain || "综合目标"),
+          subject: String(analysis.subject || goal),
+          knownSubject: analysis.knownSubject !== false,
+          expertiseAngle: String(analysis.expertiseAngle || ""),
+          successCriteria: sanitizeList(analysis.successCriteria, ["能拿出可检验的阶段成果"]),
+          keyMilestones: sanitizeList(analysis.keyMilestones, ["建立基线", "核心推进", "验收复盘"]),
+          riskFactors: sanitizeList(analysis.riskFactors, ["中途失去节奏"]),
+          coachStrategy: String(analysis.coachStrategy || ""),
+          feasibilityNote: String(analysis.feasibilityNote || ""),
+          riskLevel: resolveRisk(analysis.riskLevel, goal).level,
+          riskNote: String(analysis.riskNote || ""),
+          disclaimer: String(analysis.disclaimer || resolveRisk(analysis.riskLevel, goal).disclaimer),
+        };
+        return streamJSON(ctx, request, () =>
+          buildPlan(env, goal, Number(totalDays), profile, persona, safeAnalysis)
+        );
+      }
+
       // --- 陪练建议周期 ---
       if (url.pathname === "/suggest-duration") {
         const { goal, profile } = body;
@@ -1117,33 +1158,53 @@ export default {
       }
 
       // 生成耗时长，走保活流，否则会被 Cloudflare 断连。
-      // 单段式那版的「缺 tasks 视为失败」检查已在 generatePlan 内部保留。
-      return streamJSON(ctx, request, () => generatePlan(env, goal, Number(totalDays), profile, persona));
+      // 单段式那版的「缺 tasks 视为失败」检查已在 buildPlan 内部保留。
+      return streamJSON(ctx, request, async () => {
+        const analysis = await diagnoseGoal(env, goal, Number(totalDays), profile);
+        return buildPlan(env, goal, Number(totalDays), profile, persona, analysis);
+      });
     } catch (error: any) {
       return json({ error: error.message }, 500, request);
     }
   },
 };
 
-async function generatePlan(
+function profileLineOf(profile: any): string {
+  const dailyMinutes = Number(profile?.dailyMinutes) || 30;
+  return `用户画像：每天可投入 ${dailyMinutes} 分钟，基础 ${profile?.currentLevel || "beginner"}，节奏偏好 ${profile?.pace || "steady"}，日程模式 ${profile?.weekdayMode || "same"}。`;
+}
+
+export interface Diagnosis {
+  domainKey: DomainKey;
+  domain: string;
+  subject: string;
+  knownSubject: boolean;
+  expertiseAngle: string;
+  successCriteria: string[];
+  keyMilestones: string[];
+  riskFactors: string[];
+  coachStrategy: string;
+  feasibilityNote: string;
+  riskLevel: RiskLevel;
+  riskNote: string;
+  disclaimer: string;
+}
+
+/**
+ * 第一段：诊断。约 20-30 秒。
+ * 单独成一个可调用的步骤，客户端就能先把诊断结果显示出来，
+ * 而不是让用户对着加载动画干等一分钟 —— 这是整个漏斗上最陡的流失点。
+ */
+async function diagnoseGoal(
   env: Env,
   goal: string,
-  totalDays: number,
-  profile: any,
-  persona: string | undefined
-): Promise<unknown> {
-  const days = Number(totalDays);
-  const dailyMinutes = Number(profile?.dailyMinutes) || 30;
-  const profileLine = `用户画像：每天可投入 ${dailyMinutes} 分钟，基础 ${profile?.currentLevel || "beginner"}，节奏偏好 ${profile?.pace || "steady"}，日程模式 ${profile?.weekdayMode || "same"}。`;
-
-  const startedAt = Date.now();
-
-  // 第一段：诊断（adaptive thinking 深想）
-  // token 上限要给思考过程留足空间，否则 JSON 会被截在半截
+  days: number,
+  profile: any
+): Promise<Diagnosis> {
   const diagRaw = await callLLM(
     env,
     DIAGNOSE_SYSTEM_PROMPT,
-    `目标：${goal}\n计划周期：${days}天\n${profileLine}\n\n请诊断这个目标，严格返回JSON。`,
+    `目标：${goal}\n计划周期：${days}天\n${profileLineOf(profile)}\n\n请诊断这个目标，严格返回JSON。`,
     0.5,
     6144,
     true
@@ -1155,15 +1216,12 @@ async function generatePlan(
     // 诊断解析失败不能让整个生成失败：退回最小诊断，拆解阶段仍能工作
     diag = {};
   }
-  const domainKey = normalizeDomainKey(diag?.domainKey);
-  const subject = String(diag?.subject || goal).trim();
-  const knownSubject = diag?.knownSubject !== false;
-
   const risk = resolveRisk(diag?.riskLevel, goal);
-  const analysis = {
-    domainKey,
+  return {
+    domainKey: normalizeDomainKey(diag?.domainKey),
     domain: String(diag?.domain || "综合目标"),
-    subject,
+    subject: String(diag?.subject || goal).trim(),
+    knownSubject: diag?.knownSubject !== false,
     expertiseAngle: String(diag?.expertiseAngle || ""),
     successCriteria: sanitizeList(diag?.successCriteria, ["能拿出可检验的阶段成果"]),
     keyMilestones: sanitizeList(diag?.keyMilestones, ["建立基线", "核心推进", "验收复盘"]),
@@ -1174,8 +1232,27 @@ async function generatePlan(
     riskNote: String(diag?.riskNote || ""),
     disclaimer: risk.disclaimer,
   };
+}
 
-  // 第二段：按诊断结论 + 领域军规拆解
+/** 第二段：拿着诊断结论拆解成每一天 */
+async function buildPlan(
+  env: Env,
+  goal: string,
+  totalDays: number,
+  profile: any,
+  persona: string | undefined,
+  analysis: Diagnosis
+): Promise<unknown> {
+  const days = Number(totalDays);
+  const dailyMinutes = Number(profile?.dailyMinutes) || 30;
+  const profileLine = profileLineOf(profile);
+  const startedAt = Date.now();
+  const domainKey = analysis.domainKey;
+  const subject = analysis.subject;
+  const knownSubject = analysis.knownSubject;
+  const risk = { level: analysis.riskLevel };
+
+  // 按诊断结论 + 领域军规拆解
   const planUser =
     `目标：${goal}\n总天数：${days}天\n${profileLine}\n\n` +
     `【诊断结论】\n` +

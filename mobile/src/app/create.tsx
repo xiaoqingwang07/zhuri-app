@@ -27,7 +27,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DisclaimerCard } from "@/components/DisclaimerCard";
 import { RhythmStrip, taskEnergy } from "@/components/RhythmStrip";
 import { Button, Card, Chip, PressableScale } from "@/components/ui";
-import { generateTasksWithFallback, suggestDuration } from "@/lib/ai";
+import {
+  diagnoseGoal,
+  generateTasksWithFallback,
+  planFromDiagnosis,
+  suggestDuration,
+} from "@/lib/ai";
 import { consumeAIQuota, isProCached, remainingAIQuota } from "@/lib/entitlements";
 import { evaluateGoalFeasibility } from "@/lib/feasibility";
 import { useGoals } from "@/lib/GoalsContext";
@@ -70,101 +75,168 @@ const WEEKDAY_OPTIONS: { label: string; value: GoalProfile["weekdayMode"] }[] = 
 const DIAGNOSIS_STEPS: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
   { icon: "search", label: "识别领域和对象，像专家一样看这个目标" },
   { icon: "shield-checkmark", label: "判断可行性，太满的计划先拦下来" },
-  { icon: "trending-up", label: "设计强度曲线：前几天轻，再稳步加码" },
-  { icon: "leaf", label: "给每天都留一个最低完成版，忙也不断档" },
-  { icon: "sparkles", label: "写好验收标准和陪练策略" },
+  { icon: "sparkles", label: "写下陪练策略和验收标准" },
 ];
 
-// 分步「诊断」把 15-60 秒的等待变成能看见的思考过程；
-// 前几步按节奏勾选，最后一步保持进行中直到 AI 真正返回
-function LoadingView({ goal }: { goal: string }) {
+const PLANNING_STEPS: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
+  { icon: "trending-up", label: "设计强度曲线：前几天轻，再稳步加码" },
+  { icon: "leaf", label: "给每天留一个最低完成版，忙也不断档" },
+  { icon: "checkmark-done", label: "逐条检查任务是否够具体" },
+];
+
+function StepList({
+  steps,
+  doneCount,
+}: {
+  steps: { icon: keyof typeof Ionicons.glyphMap; label: string }[];
+  doneCount: number;
+}) {
+  const { colors } = useTheme();
+  return (
+    <View
+      style={[styles.stepList, { backgroundColor: colors.card, borderColor: colors.border }]}
+    >
+      {steps.map((step, i) => {
+        const state = i < doneCount ? "done" : i === doneCount ? "active" : "pending";
+        return (
+          <View key={step.label} style={styles.stepRow}>
+            <View
+              style={[
+                styles.stepIcon,
+                {
+                  backgroundColor:
+                    state === "done"
+                      ? colors.successSoft
+                      : state === "active"
+                        ? colors.primarySoft
+                        : colors.background,
+                },
+              ]}
+            >
+              {state === "done" ? (
+                <Animated.View entering={ZoomIn.springify().damping(12)}>
+                  <Ionicons name="checkmark" size={15} color={colors.success} />
+                </Animated.View>
+              ) : state === "active" ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Ionicons name={step.icon} size={13} color={colors.textTertiary} />
+              )}
+            </View>
+            <Text
+              style={[
+                styles.stepLabel,
+                {
+                  color: state === "pending" ? colors.textTertiary : colors.text,
+                  fontWeight: state === "active" ? "800" : "600",
+                },
+              ]}
+            >
+              {step.label}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+/**
+ * 加载页分两幕：
+ *   第一幕（约 20 秒）诊断中，只有步骤动画；
+ *   第二幕 诊断已返回，把结论亮出来给用户读，任务在后台继续生成。
+ * 关键在于第二幕 —— 用户手里有实质内容可看，剩下的 40 秒就不再是干等。
+ */
+function LoadingView({
+  goal,
+  analysis,
+}: {
+  goal: string;
+  analysis: GoalAnalysis | null;
+}) {
   const { colors } = useTheme();
   const [doneCount, setDoneCount] = useState(0);
   const rotation = useSharedValue(0);
+  const planning = !!analysis;
+  const spinStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.value}deg` }],
+  }));
 
   useEffect(() => {
     rotation.value = withRepeat(
       withTiming(360, { duration: 2400, easing: Easing.linear }),
       -1
     );
-    // 两段式生成实测 50-65 秒，节奏按真实耗时铺开，最后一步等 AI 真正返回
-    const milestones = [4000, 12000, 24000, 38000];
-    const timers = milestones.map((ms, i) =>
-      setTimeout(() => setDoneCount(i + 1), ms)
-    );
-    return () => timers.forEach(clearTimeout);
   }, [rotation]);
 
-  const spinStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotation.value}deg` }],
-  }));
+  // 每一幕的勾选节奏按各自的真实耗时铺开，最后一步保持进行中直到结果返回
+  useEffect(() => {
+    setDoneCount(0);
+    const milestones = planning ? [6000, 18000] : [5000, 11000];
+    const timers = milestones.map((ms, i) => setTimeout(() => setDoneCount(i + 1), ms));
+    return () => timers.forEach(clearTimeout);
+  }, [planning]);
 
   return (
-    <View style={styles.loadingContainer}>
+    <ScrollView
+      contentContainerStyle={styles.loadingContainer}
+      showsVerticalScrollIndicator={false}
+    >
       <Animated.View style={spinStyle}>
-        <Text style={{ fontSize: 44 }}>☀️</Text>
+        <Text style={{ fontSize: 40 }}>☀️</Text>
       </Animated.View>
+
       <Text style={[styles.loadingTitle, { color: colors.text }]}>
-        陪练正在诊断这个目标
+        {planning ? "正在把它拆成每一天" : "陪练正在诊断这个目标"}
       </Text>
-      <Text
-        style={[styles.loadingGoal, { color: colors.textSecondary }]}
-        numberOfLines={2}
-      >
-        「{goal}」
-      </Text>
-      <View
-        style={[
-          styles.stepList,
-          { backgroundColor: colors.card, borderColor: colors.border },
-        ]}
-      >
-        {DIAGNOSIS_STEPS.map((step, i) => {
-          const state = i < doneCount ? "done" : i === doneCount ? "active" : "pending";
-          return (
-            <View key={step.label} style={styles.stepRow}>
-              <View
-                style={[
-                  styles.stepIcon,
-                  {
-                    backgroundColor:
-                      state === "done"
-                        ? colors.successSoft
-                        : state === "active"
-                          ? colors.primarySoft
-                          : colors.background,
-                  },
-                ]}
-              >
-                {state === "done" ? (
-                  <Animated.View entering={ZoomIn.springify().damping(12)}>
-                    <Ionicons name="checkmark" size={15} color={colors.success} />
-                  </Animated.View>
-                ) : state === "active" ? (
-                  <ActivityIndicator size="small" color={colors.primary} />
-                ) : (
-                  <Ionicons name={step.icon} size={13} color={colors.textTertiary} />
-                )}
-              </View>
-              <Text
-                style={[
-                  styles.stepLabel,
-                  {
-                    color: state === "pending" ? colors.textTertiary : colors.text,
-                    fontWeight: state === "active" ? "800" : "600",
-                  },
-                ]}
-              >
-                {step.label}
-              </Text>
+
+      {!planning && (
+        <Text
+          style={[styles.loadingGoal, { color: colors.textSecondary }]}
+          numberOfLines={2}
+        >
+          「{goal}」
+        </Text>
+      )}
+
+      {/* 诊断一到就先给用户看，这是最能体现专业度的内容 */}
+      {analysis && (
+        <Animated.View entering={FadeInDown.springify()} style={{ alignSelf: "stretch" }}>
+          <Card style={{ gap: spacing.sm }}>
+            <View style={styles.diagHeader}>
+              <Ionicons name="sparkles" size={15} color={colors.primary} />
+              <Text style={[styles.diagKicker, { color: colors.primary }]}>诊断完成</Text>
             </View>
-          );
-        })}
-      </View>
+            <Text style={[styles.diagTitle, { color: colors.text }]}>
+              {analysis.domain} · {analysis.subject}
+            </Text>
+            {!!analysis.expertiseAngle && (
+              <Text style={[styles.diagBody, { color: colors.textSecondary }]}>
+                {analysis.expertiseAngle}
+              </Text>
+            )}
+            {!!analysis.coachStrategy && (
+              <View style={[styles.diagStrategy, { backgroundColor: colors.background }]}>
+                <Text style={[styles.diagStrategyLabel, { color: colors.textTertiary }]}>
+                  陪练策略
+                </Text>
+                <Text style={[styles.diagStrategyText, { color: colors.text }]}>
+                  {analysis.coachStrategy}
+                </Text>
+              </View>
+            )}
+          </Card>
+        </Animated.View>
+      )}
+
+      <StepList steps={planning ? PLANNING_STEPS : DIAGNOSIS_STEPS} doneCount={doneCount} />
+
       <Text style={[styles.loadingHint, { color: colors.textTertiary }]}>
-        陪练会先深想再落笔，通常需要 1 分钟左右
+        {planning
+          ? "计划还在生成，大约再 40 秒，先看看上面的诊断"
+          : "先想清楚这是个什么目标，通常 20–40 秒"}
       </Text>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -353,9 +425,20 @@ export default function CreateGoalScreen() {
     }
 
     generatingRef.current = true;
+    setGoalAnalysis(null);
     setStep("loading");
     try {
-      const result = await generateTasksWithFallback(goal, days, profile, persona);
+      // 两幕式：诊断先回来就立刻展示，用户不必对着空屏等满一分钟
+      let result;
+      try {
+        const analysis = await diagnoseGoal(goal, days, profile);
+        setGoalAnalysis(analysis);
+        Haptics.selectionAsync().catch(() => {});
+        result = await planFromDiagnosis(goal, days, profile, persona, analysis);
+      } catch {
+        // 分步链路任一环出问题，退回一次性生成（内部还有本地模板兜底）
+        result = await generateTasksWithFallback(goal, days, profile, persona);
+      }
       if (result.usedAI) consumeAIQuota();
       setTasks(result.tasks);
       setGoalAnalysis(result.analysis);
@@ -415,7 +498,9 @@ export default function CreateGoalScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      {step === "loading" && <LoadingView goal={goalText.trim()} />}
+      {step === "loading" && (
+        <LoadingView goal={goalText.trim()} analysis={goalAnalysis} />
+      )}
 
       {step === "input" && (
         <ScrollView
@@ -1097,11 +1182,44 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
   loadingContainer: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: "center",
     justifyContent: "center",
     gap: spacing.md,
     paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+  },
+  diagHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  diagKicker: {
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  diagTitle: {
+    fontSize: 17,
+    lineHeight: 23,
+    fontWeight: "900",
+  },
+  diagBody: {
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  diagStrategy: {
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    gap: 3,
+  },
+  diagStrategyLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  diagStrategyText: {
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "700",
   },
   loadingTitle: {
     fontSize: 22,
