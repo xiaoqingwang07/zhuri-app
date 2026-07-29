@@ -574,14 +574,41 @@ function stripThinking(content: string): string {
   return content
     .replace(/<think>[\s\S]*?<\/think>/gi, "")
     .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
+    // 兜底：去掉任何残留（含未闭合）的 think 标签本身
+    .replace(/<\/?think(?:ing)?>/gi, "")
     .trim();
+}
+
+// 从指定位置起用括号配对扫描出一个完整 JSON 对象，
+// 正确跳过字符串字面量里的花括号，避免贪婪匹配吞掉多余文本或半截 JSON。
+function balancedJsonFrom(text: string, start: number): string | null {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
 }
 
 function tokensForPlanDays(totalDays: number, compact = false): number {
   // 完整字段每天实测约 170-200 token，精简 schema 约 110-130。
-  // 给少了会被截断成「要30天只给26天」，这是用户直接可见的缺陷。
-  const perDay = compact ? 145 : 210;
-  return Math.min(16384, Math.max(4096, 1200 + Number(totalDays) * perDay));
+  // 拆解阶段 thinking 是关的（诊断阶段才开），所以不必像单段式那样为思考留额度，
+  // 但底线仍留足 —— 给少了会被截断成「要30天只给26天」，这是用户直接可见的缺陷。
+  const perDay = compact ? 160 : 220;
+  return Math.min(16384, Math.max(6144, 1600 + Number(totalDays) * perDay));
 }
 
 /**
@@ -654,29 +681,44 @@ function errorPosition(err: unknown): number {
 }
 
 function extractJSON(content: string): any {
-  // 先剥 markdown 代码围栏：模型经常把 JSON 包在 ```json 里，
-  // 被 max_tokens 截断时收尾的 ``` 还会丢失，直接正则取 {...} 会漏
-  const cleaned = stripThinking(content)
-    .replace(/^\s*```(?:json)?\s*/i, "")
-    .replace(/\s*```\s*$/, "")
-    .trim();
-  const match = cleaned.match(/\{[\s\S]*\}/);
-  const raw = match ? match[0] : cleaned;
+  let cleaned = stripThinking(content);
+  // 模型常把 JSON 包在 ```json ... ``` 代码块里，先取块内内容。
+  // 被 max_tokens 截断时收尾的 ``` 会丢失，所以补一条只剥开头围栏的退路。
+  const fence = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) cleaned = fence[1].trim();
+  else cleaned = cleaned.replace(/^\s*```(?:json)?\s*/i, "").trim();
+
+  // 主路径：依次尝试每个 '{' 作为起点做括号配对，
+  // 能跳过推理文本里残留的散花括号，也不会像贪婪正则那样吞掉多余内容
+  for (let i = cleaned.indexOf("{"); i !== -1; i = cleaned.indexOf("{", i + 1)) {
+    const candidate = balancedJsonFrom(cleaned, i);
+    if (!candidate) continue;
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === "object") return parsed;
+    } catch {
+      // 该起点不是合法 JSON，试下一个
+    }
+  }
+
+  // 兜底一：整段被 max_tokens 截断，括号配对永远收不了尾 —— 补齐闭合符。
+  // 前面已经生成好的任务是可用的，救回来比整个失败强。
+  const start = cleaned.indexOf("{");
+  const raw = start === -1 ? cleaned : cleaned.slice(start);
+  const repaired = repairTruncatedJSON(raw);
+  if (repaired) {
+    try {
+      return JSON.parse(repaired);
+    } catch {
+      // 落到兜底二
+    }
+  }
+
+  // 兜底二：中间就有语法错（多是字符串里混入未转义的引号）。
+  // 从出错位置往前砍掉，保住前面已经完整的那部分任务。
   try {
     return JSON.parse(raw);
   } catch (err) {
-    // 情况一：结尾被 max_tokens 截断 —— 补齐闭合符
-    const repaired = repairTruncatedJSON(raw);
-    if (repaired) {
-      try {
-        return JSON.parse(repaired);
-      } catch {
-        // 落到情况二
-      }
-    }
-
-    // 情况二：中间就有语法错（多是字符串里混入未转义的引号）。
-    // 从出错位置往前砍掉，保住前面已经完整的那部分任务。
     const pos = errorPosition(err);
     if (pos > 0 && pos < raw.length) {
       const head = repairTruncatedJSON(raw.slice(0, pos));
@@ -1074,7 +1116,8 @@ export default {
         return json({ error: "totalDays too large" }, 400, request);
       }
 
-      // 生成耗时长，走保活流，否则会被 Cloudflare 断连
+      // 生成耗时长，走保活流，否则会被 Cloudflare 断连。
+      // 单段式那版的「缺 tasks 视为失败」检查已在 generatePlan 内部保留。
       return streamJSON(ctx, request, () => generatePlan(env, goal, Number(totalDays), profile, persona));
     } catch (error: any) {
       return json({ error: error.message }, 500, request);
