@@ -17,6 +17,7 @@ import Animated, { FadeInDown, ZoomIn } from "react-native-reanimated";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BadgeModal } from "@/components/BadgeModal";
+import { CelebrationModal } from "@/components/CelebrationModal";
 import { Confetti } from "@/components/Confetti";
 import { SunDial } from "@/components/SunDial";
 import { Button, Card, PressableScale, ProgressBar } from "@/components/ui";
@@ -91,6 +92,7 @@ export default function TodayScreen() {
   const [proofUri, setProofUri] = useState<string | null>(null);
   const [pickingPhoto, setPickingPhoto] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [celebrating, setCelebrating] = useState<Goal | null>(null);
 
   const today = todayStr();
   const personaInfo = PERSONAS.find((p) => p.id === persona)!;
@@ -209,21 +211,11 @@ export default function TodayScreen() {
         setTimeout(() => setUnlockedBadge(result.newBadges[0]), 600);
       }
       if (result.justCompleted) {
-        setTimeout(() => {
-          Alert.alert(
-            result.aheadDays > 0 ? `提前 ${result.aheadDays} 天达成` : "目标达成",
-            result.aheadDays > 0
-              ? `你把「${goal.name}」比原计划提前 ${result.aheadDays} 天做完了。去领一张成就证书吧。`
-              : `你完成了「${goal.name}」。去目标详情页领一张成就证书吧。`,
-            [
-              { text: "稍后", style: "cancel" },
-              { text: "查看证书", onPress: () => router.push(`/goal/${goal.id}`) },
-            ]
-          );
-        }, 1200);
+        // 坚持了几十天，值得一个完整的收尾，而不是一个系统弹窗
+        setTimeout(() => setCelebrating(result.goal), 900);
       }
     },
-    [checkIn, didChallenge, feedbackBlocker, feedbackDifficulty, feedbackMinutes, proofUri, router]
+    [checkIn, didChallenge, feedbackBlocker, feedbackDifficulty, feedbackMinutes, proofUri]
   );
 
   // 强度校准：只提议，由用户点头才执行 —— 加码是提高难度，不能自动做主
@@ -681,6 +673,16 @@ export default function TodayScreen() {
 
       {showConfetti && <Confetti onDone={() => setShowConfetti(false)} />}
       <BadgeModal badge={unlockedBadge} onClose={() => setUnlockedBadge(null)} />
+      <CelebrationModal
+        goal={celebrating}
+        visible={!!celebrating}
+        onClose={() => setCelebrating(null)}
+        onViewCertificate={() => {
+          const id = celebrating?.id;
+          setCelebrating(null);
+          if (id) router.push(`/goal/${id}`);
+        }}
+      />
       <Modal
         visible={!!feedbackGoal}
         transparent
