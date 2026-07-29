@@ -662,8 +662,11 @@ export default function CreateGoalScreen() {
           </View>
 
           <Button title="生成我的陪跑计划" onPress={() => generate()} />
+          {/* 平时不提额度：免费额度对正常使用绰绰有余，天天显示剩余次数只会制造焦虑 */}
           <Text style={[styles.quotaHint, { color: colors.textTertiary }]}>
-            本月还有 {remaining === Infinity ? "充足" : remaining} 次 AI 生成；失败时会自动用本地计划兜底
+            {remaining !== Infinity && remaining <= 5
+              ? `本月还剩 ${remaining} 次 AI 生成，下月自动恢复`
+              : "AI 不可用时会自动用本地计划兜底，不会卡住你"}
           </Text>
         </ScrollView>
       )}

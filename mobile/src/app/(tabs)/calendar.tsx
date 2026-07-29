@@ -161,14 +161,12 @@ export default function CalendarScreen() {
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={{
-        paddingTop: insets.top + spacing.sm,
+        paddingTop: insets.top + spacing.md,
         paddingHorizontal: spacing.md,
         paddingBottom: spacing.lg,
         gap: spacing.md,
       }}
     >
-      <Text style={[styles.title, { color: colors.textSecondary }]}>复盘</Text>
-
       {goals.length === 0 ? (
         <Card style={{ alignItems: "center", paddingVertical: spacing.xl, gap: spacing.sm }}>
           <Text style={{ fontSize: 44 }}>📅</Text>
@@ -445,10 +443,6 @@ export default function CalendarScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
   chipRow: {
     flexDirection: "row",
     flexWrap: "wrap",

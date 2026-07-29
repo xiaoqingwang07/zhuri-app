@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 import Animated, { FadeInDown, ZoomIn } from "react-native-reanimated";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BadgeModal } from "@/components/BadgeModal";
 import { Confetti } from "@/components/Confetti";
@@ -27,7 +28,7 @@ import { kvGet, kvSet } from "@/lib/db";
 import { rescheduleReminders } from "@/lib/notifications";
 import { isProCached, maxGoals } from "@/lib/entitlements";
 import { useGoals } from "@/lib/GoalsContext";
-import { formatChineseDate, todayStr, weekdayName } from "@/lib/dates";
+import { formatChineseDate, todayStr } from "@/lib/dates";
 import {
   completionRate,
   missedDays,
@@ -71,6 +72,7 @@ const FEEDBACK_DIFFICULTIES: {
 export default function TodayScreen() {
   const { colors, gradients, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
   const { activeGoals, goals, checkIn, persona, adjustPlan, updateGoal } = useGoals();
   const [showConfetti, setShowConfetti] = useState(false);
@@ -255,10 +257,10 @@ export default function TodayScreen() {
     const limit = maxGoals(isProCached());
     if (activeGoals.length >= limit) {
       Alert.alert(
-        "目标数量已达上限",
+        "先把手上的做完",
         isProCached()
           ? `最多同时进行 ${limit} 个目标，先完成一个再来吧。`
-          : `免费版最多 ${limit} 个并行目标。升级 Plus 可同时进行更多目标。`,
+          : `同时推进 ${limit} 个以上的目标，通常是全线崩盘的开始，所以免费版就到这里。真的需要更多可以看看 Plus。`,
         isProCached()
           ? [{ text: "知道了" }]
           : [
@@ -318,24 +320,13 @@ export default function TodayScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <ScrollView
         contentContainerStyle={{
-          paddingTop: insets.top + spacing.sm,
+          paddingTop: insets.top + spacing.md,
           paddingHorizontal: spacing.md,
-          paddingBottom: spacing.lg,
+          // 给右下角悬浮按钮让出空间，否则会压住最后一张卡片
+          paddingBottom: spacing.xl + 56,
           gap: spacing.md,
         }}
       >
-        {/* App 名不必在 App 内重复出现，日期和加号一行就够 */}
-        <View style={styles.header}>
-          <Text style={[styles.date, { color: colors.textSecondary }]}>
-            {formatChineseDate(today)} · {weekdayName(today)}
-          </Text>
-          <PressableScale
-            onPress={handleAddGoal}
-            style={[styles.addButton, { backgroundColor: colors.primary }]}
-          >
-            <Ionicons name="add" size={20} color="#FFF" />
-          </PressableScale>
-        </View>
 
         {activeGoals.length === 0 && (
           <Animated.View entering={FadeInDown.springify()}>
@@ -379,9 +370,12 @@ export default function TodayScreen() {
               />
               <View style={styles.heroTop}>
                 <View style={{ flex: 1 }}>
+                  {/* 日期并进问候语这行，顶部就不必单独占一条 */}
                   <View style={styles.kickerRow}>
                     <View style={[styles.liveDot, { backgroundColor: doneToday ? colors.success : colors.primary }]} />
-                    <Text style={[styles.greeting, { color: colors.textSecondary }]}>{greeting()}</Text>
+                    <Text style={[styles.greeting, { color: colors.textSecondary }]} numberOfLines={1}>
+                      {formatChineseDate(today)} · {greeting()}
+                    </Text>
                   </View>
                   <Text style={[styles.heroTitle, { color: colors.text }]} numberOfLines={2}>
                     {doneToday ? sun.title : primaryGoal.name}
@@ -662,6 +656,18 @@ export default function TodayScreen() {
         )}
       </ScrollView>
 
+      {/* 悬浮在右下角：拇指最容易够到的位置，也把顶部完全空出来 */}
+      <PressableScale
+        onPress={handleAddGoal}
+        haptic="light"
+        style={[
+          styles.fab,
+          { backgroundColor: colors.primary, bottom: tabBarHeight + spacing.md },
+        ]}
+      >
+        <Ionicons name="add" size={28} color="#FFF" />
+      </PressableScale>
+
       {showConfetti && <Confetti onDone={() => setShowConfetti(false)} />}
       <BadgeModal badge={unlockedBadge} onClose={() => setUnlockedBadge(null)} />
       <Modal
@@ -880,21 +886,19 @@ export default function TodayScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  date: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  addButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  fab: {
+    position: "absolute",
+    right: spacing.md,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.24,
+    shadowRadius: 12,
+    elevation: 8,
   },
   emptyCard: {
     alignItems: "center",

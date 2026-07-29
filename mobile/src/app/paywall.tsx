@@ -21,17 +21,25 @@ import {
 import { spacing } from "@/theme/colors";
 import { useTheme } from "@/theme/useTheme";
 
+/**
+ * 定价原则：陪跑这件事本身永远免费。
+ * Plus 只卖「更多」和「去水印」，不锁任何一个决定成败的功能 ——
+ * 一个因为没付费而断掉的用户，对产品毫无价值。
+ */
 const FREE_FEATURES = [
-  "AI 生成陪跑计划",
-  "每日提醒和连续打卡",
-  "落后救援重排",
-  "最多 3 个目标同时进行",
+  "领域专家诊断 + AI 陪跑计划",
+  "每天只看今天，忙时有最低完成版",
+  "落后救援：断了也能重排接回来",
+  "强度自适应：太轻太重都会帮你校准",
+  "打卡拍照记录与足迹分享",
+  "每日提醒、连续打卡、徽章与复盘",
+  "3 个目标同时进行",
 ];
 
 const PRO_FEATURES = [
   { emoji: "🎯", title: "12 个目标并行", desc: "学习、运动、创作、考试一起推进，不用频繁删目标" },
-  { emoji: "⚡️", title: "更高 AI 额度", desc: "每日可用更多次拆解、救援重排与督促文案生成" },
-  { emoji: "🏅", title: "证书去水印", desc: "成就证书分享时去掉推广水印，更适合认真晒成果" },
+  { emoji: "⚡️", title: "更高 AI 额度", desc: "更多次计划生成、救援重排与周复盘" },
+  { emoji: "🏅", title: "证书去水印", desc: "成就证书分享时去掉推广水印" },
 ];
 
 export default function PaywallScreen() {

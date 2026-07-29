@@ -138,38 +138,33 @@ export default function SettingsScreen() {
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={{
-        paddingTop: insets.top + spacing.sm,
+        paddingTop: insets.top + spacing.md,
         paddingHorizontal: spacing.md,
         paddingBottom: spacing.lg,
         gap: spacing.lg,
       }}
     >
-      <Text style={[styles.title, { color: colors.textSecondary }]}>设置</Text>
-
-      {/* 支持卡片 */}
-      <PressableScale onPress={() => router.push("/paywall")}>
-        <Card
-          style={{
-            backgroundColor: pro ? colors.successSoft : colors.primarySoft,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: spacing.md,
-          }}
-        >
-          <Text style={{ fontSize: 32 }}>{pro ? "👑" : "✨"}</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.proTitle, { color: colors.text }]}>
-              {pro ? "逐日 Plus 已开通" : "了解逐日 Plus"}
-            </Text>
-            <Text style={{ fontSize: 13, color: colors.textSecondary }}>
-              {pro
-                ? "多目标、更高 AI 额度和证书去水印已解锁"
-                : "核心功能免费，Plus 解锁多目标、更高 AI 额度与证书去水印"}
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
-        </Card>
-      </PressableScale>
+      {pro && (
+        <PressableScale onPress={() => router.push("/paywall")}>
+          <Card
+            style={{
+              backgroundColor: colors.successSoft,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: spacing.md,
+            }}
+          >
+            <Text style={{ fontSize: 28 }}>👑</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.proTitle, { color: colors.text }]}>逐日 Plus 已开通</Text>
+              <Text style={{ fontSize: 13, color: colors.textSecondary }}>
+                多目标、更高 AI 额度和证书去水印已解锁
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+          </Card>
+        </PressableScale>
+      )}
 
       {/* 督促人格 */}
       <View>
@@ -303,10 +298,14 @@ export default function SettingsScreen() {
         </Card>
       </View>
 
-      {/* 其他 */}
+      {/* 订阅相关放在最后、用最朴素的行样式：
+          陪跑本身永远免费，付费入口没必要在用户每天要用的地方吆喝 */}
       <View>
         <SectionTitle>其他</SectionTitle>
         <Card style={{ paddingVertical: 4 }}>
+          {!pro && (
+            <SettingsRow label="逐日 Plus" onPress={() => router.push("/paywall")} />
+          )}
           <SettingsRow
             label="恢复购买"
             loading={restoring}
@@ -316,7 +315,9 @@ export default function SettingsScreen() {
           <SettingsRow label="服务条款" onPress={() => Linking.openURL(TERMS_URL)} />
         </Card>
         <Text style={[styles.version, { color: colors.textTertiary }]}>
-          逐日 v1.0.0 · AI 教练陪你达成目标
+          {pro
+            ? "逐日 v1.0.0 · AI 教练陪你达成目标"
+            : "逐日 v1.0.0 · 陪跑功能永久免费，Plus 只增加目标数量与 AI 额度"}
         </Text>
       </View>
 
@@ -369,10 +370,6 @@ function SettingsRow({
 }
 
 const styles = StyleSheet.create({
-  title: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
   proTitle: {
     fontSize: 16,
     fontWeight: "800",
