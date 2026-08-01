@@ -292,6 +292,7 @@ export default function TodayScreen() {
   const tomorrowTask =
     doneToday && primaryTodayIdx !== -1 ? primaryGoal?.tasks[primaryTodayIdx + 1] : null;
   const sun = sunStateFor(primaryGoal ? goalPhase(primaryGoal) : "dawn", isDark);
+  const isEmpty = activeGoals.length === 0;
   const pace = primaryGoal ? assessPace(primaryGoal) : null;
   const feedbackPlannedMinutes = feedbackGoal
     ? (() => {
@@ -325,13 +326,16 @@ export default function TodayScreen() {
         contentContainerStyle={{
           paddingTop: insets.top + spacing.md,
           paddingHorizontal: spacing.md,
-          // 给右下角悬浮按钮让出空间，否则会压住最后一张卡片
-          paddingBottom: spacing.xl + 56,
+          // 有目标时给右下角悬浮按钮让位；空状态没有悬浮按钮，也就不用留
+          paddingBottom: isEmpty ? spacing.lg : spacing.xl + 56,
           gap: spacing.md,
+          // 空状态内容很少，顶部对齐会在下面留一大片黑，居中才不显得空
+          flexGrow: 1,
+          justifyContent: isEmpty ? "center" : "flex-start",
         }}
       >
 
-        {activeGoals.length === 0 && (
+        {isEmpty && (
           <Animated.View entering={FadeInDown.springify()}>
             <Card style={styles.emptyCard}>
               <LinearGradient
@@ -659,17 +663,20 @@ export default function TodayScreen() {
         )}
       </ScrollView>
 
-      {/* 悬浮在右下角：拇指最容易够到的位置，也把顶部完全空出来 */}
-      <PressableScale
-        onPress={handleAddGoal}
-        haptic="light"
-        style={[
-          styles.fab,
-          { backgroundColor: colors.primary, bottom: tabBarHeight + spacing.md },
-        ]}
-      >
-        <Ionicons name="add" size={28} color="#FFF" />
-      </PressableScale>
+      {/* 悬浮在右下角：拇指最容易够到的位置，也把顶部完全空出来。
+          空状态时卡片里已经有一个明确的大按钮，再放一个加号就是重复。 */}
+      {!isEmpty && (
+        <PressableScale
+          onPress={handleAddGoal}
+          haptic="light"
+          style={[
+            styles.fab,
+            { backgroundColor: colors.primary, bottom: tabBarHeight + spacing.md },
+          ]}
+        >
+          <Ionicons name="add" size={28} color="#FFF" />
+        </PressableScale>
+      )}
 
       {showConfetti && <Confetti onDone={() => setShowConfetti(false)} />}
       <BadgeModal badge={unlockedBadge} onClose={() => setUnlockedBadge(null)} />

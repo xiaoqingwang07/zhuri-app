@@ -36,14 +36,14 @@ import {
 } from "@/lib/notifications";
 import { PERSONAS } from "@/lib/types";
 import { radius, spacing } from "@/theme/colors";
-import { useTheme } from "@/theme/useTheme";
+import { THEME_OPTIONS, useTheme } from "@/theme/useTheme";
 
 const PRIVACY_URL = "https://xiaoqingwang07.github.io/zhuri-app/privacy.html";
 const TERMS_URL = "https://xiaoqingwang07.github.io/zhuri-app/terms.html";
 const HOUR_OPTIONS = [7, 9, 12, 18, 20, 21, 22];
 
 export default function SettingsScreen() {
-  const { colors } = useTheme();
+  const { colors, pref, setPref } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { persona, setPersona, goals } = useGoals();
@@ -53,6 +53,8 @@ export default function SettingsScreen() {
   const [busyBackup, setBusyBackup] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState("");
+  const [backupOpen, setBackupOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const pro = isProCached();
 
   const handleToggleReminder = useCallback(
@@ -166,6 +168,20 @@ export default function SettingsScreen() {
         </PressableScale>
       )}
 
+      <View>
+        <SectionTitle>外观</SectionTitle>
+        <View style={styles.chipRow}>
+          {THEME_OPTIONS.map((opt) => (
+            <Chip
+              key={opt.id}
+              label={opt.label}
+              active={pref === opt.id}
+              onPress={() => setPref(opt.id)}
+            />
+          ))}
+        </View>
+      </View>
+
       {/* 督促人格 */}
       <View>
         <SectionTitle>AI 教练人格</SectionTitle>
@@ -239,80 +255,111 @@ export default function SettingsScreen() {
         </Card>
       </View>
 
-      {/* 备份 */}
+      {/* 备份是低频功能，五个入口平铺出来只会让设置页显得又长又杂，
+          默认收成一行，需要的人点开就是。 */}
       <View>
-        <SectionTitle>数据备份</SectionTitle>
         <Card style={{ paddingVertical: 4 }}>
           <SettingsRow
-            label="导出备份（分享 JSON）"
-            loading={busyBackup}
-            onPress={() =>
-              runBackup(async () => {
-                await exportBackupShare();
-                return "已打开系统分享，请保存到文件或备忘录。";
-              })
-            }
+            label="备份与恢复"
+            onPress={() => setBackupOpen((v) => !v)}
+            trailing={backupOpen ? "收起" : undefined}
           />
-          <SettingsRow
-            label="从 JSON 文本导入"
-            onPress={() => setImportOpen(true)}
-          />
-          <SettingsRow
-            label="上传到云端备份"
-            loading={busyBackup}
-            onPress={() =>
-              runBackup(async () => {
-                await syncBackupToCloud();
-                return "已上传到云端（绑定本机匿名设备 ID）。";
-              })
-            }
-          />
-          <SettingsRow
-            label="从云端恢复"
-            loading={busyBackup}
-            onPress={() =>
-              runBackup(async () => {
-                const result = await restoreBackupFromCloud();
-                return `已恢复 ${result.goals} 个目标。请完全退出 App 后重新打开以刷新界面。`;
-              })
-            }
-          />
-          <SettingsRow
-            label="清除云端备份"
-            loading={busyBackup}
-            onPress={() => {
-              Alert.alert("清除云端备份？", "仅清除服务器上的备份，不影响本机数据。", [
-                { text: "取消", style: "cancel" },
-                {
-                  text: "清除",
-                  style: "destructive",
-                  onPress: () =>
-                    runBackup(async () => {
-                      await clearCloudBackup();
-                      return "云端备份已清除。";
-                    }),
-                },
-              ]);
-            }}
-          />
+          {backupOpen && (
+            <>
+              <SettingsRow
+                label="导出备份（分享 JSON）"
+                indented
+                loading={busyBackup}
+                onPress={() =>
+                  runBackup(async () => {
+                    await exportBackupShare();
+                    return "已打开系统分享，请保存到文件或备忘录。";
+                  })
+                }
+              />
+              <SettingsRow
+                label="从 JSON 文本导入"
+                indented
+                onPress={() => setImportOpen(true)}
+              />
+              <SettingsRow
+                label="上传到云端备份"
+                indented
+                loading={busyBackup}
+                onPress={() =>
+                  runBackup(async () => {
+                    await syncBackupToCloud();
+                    return "已上传到云端（绑定本机匿名设备 ID）。";
+                  })
+                }
+              />
+              <SettingsRow
+                label="从云端恢复"
+                indented
+                loading={busyBackup}
+                onPress={() =>
+                  runBackup(async () => {
+                    const result = await restoreBackupFromCloud();
+                    return `已恢复 ${result.goals} 个目标。请完全退出 App 后重新打开以刷新界面。`;
+                  })
+                }
+              />
+              <SettingsRow
+                label="清除云端备份"
+                indented
+                loading={busyBackup}
+                onPress={() => {
+                  Alert.alert("清除云端备份？", "仅清除服务器上的备份，不影响本机数据。", [
+                    { text: "取消", style: "cancel" },
+                    {
+                      text: "清除",
+                      style: "destructive",
+                      onPress: () =>
+                        runBackup(async () => {
+                          await clearCloudBackup();
+                          return "云端备份已清除。";
+                        }),
+                    },
+                  ]);
+                }}
+              />
+            </>
+          )}
         </Card>
       </View>
 
-      {/* 订阅相关放在最后、用最朴素的行样式：
+      {/* 订阅和条款都是低频，收成两行就够；
           陪跑本身永远免费，付费入口没必要在用户每天要用的地方吆喝 */}
       <View>
-        <SectionTitle>其他</SectionTitle>
         <Card style={{ paddingVertical: 4 }}>
           {!pro && (
             <SettingsRow label="逐日 Plus" onPress={() => router.push("/paywall")} />
           )}
           <SettingsRow
-            label="恢复购买"
-            loading={restoring}
-            onPress={handleRestore}
+            label="关于与条款"
+            onPress={() => setAboutOpen((v) => !v)}
+            trailing={aboutOpen ? "收起" : undefined}
           />
-          <SettingsRow label="隐私政策" onPress={() => Linking.openURL(PRIVACY_URL)} />
-          <SettingsRow label="服务条款" onPress={() => Linking.openURL(TERMS_URL)} />
+          {aboutOpen && (
+            <>
+              <SettingsRow
+                label="恢复购买"
+                indented
+                loading={restoring}
+                onPress={handleRestore}
+              />
+              <SettingsRow
+                label="隐私政策"
+                indented
+                onPress={() => Linking.openURL(PRIVACY_URL)}
+              />
+              <SettingsRow
+                label="服务条款"
+                indented
+                onPress={() => Linking.openURL(TERMS_URL)}
+              />
+            </>
+          )}
         </Card>
         <Text style={[styles.version, { color: colors.textTertiary }]}>
           {pro
@@ -351,19 +398,34 @@ function SettingsRow({
   label,
   onPress,
   loading,
+  indented,
+  trailing,
 }: {
   label: string;
   onPress: () => void;
   loading?: boolean;
+  /** 折叠区里的子项，缩进一档以体现层级 */
+  indented?: boolean;
+  trailing?: string;
 }) {
   const { colors } = useTheme();
   return (
     <PressableScale onPress={loading ? undefined : onPress}>
-      <View style={styles.settingsRow}>
-        <Text style={[styles.rowLabel, { color: colors.text }]}>
+      <View style={[styles.settingsRow, indented && { paddingLeft: spacing.md }]}>
+        <Text
+          style={[
+            styles.rowLabel,
+            { color: indented ? colors.textSecondary : colors.text },
+            indented && { fontSize: 14 },
+          ]}
+        >
           {loading ? `${label}…` : label}
         </Text>
-        <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+        {trailing ? (
+          <Text style={{ fontSize: 13, color: colors.textTertiary }}>{trailing}</Text>
+        ) : (
+          <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+        )}
       </View>
     </PressableScale>
   );

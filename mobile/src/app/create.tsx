@@ -54,6 +54,8 @@ const DAY_OPTIONS = [7, 14, 21, 30, 60, 100];
 const MINUTE_OPTIONS = [15, 25, 40, 60];
 const MIN_DAYS = 3;
 const MAX_DAYS = 365;
+const MIN_MINUTES = 5;
+const MAX_MINUTES = 480;
 
 const LEVEL_OPTIONS: { label: string; value: GoalProfile["currentLevel"] }[] = [
   { label: "刚开始", value: "beginner" },
@@ -306,11 +308,15 @@ export default function CreateGoalScreen() {
   const [expandedWeeks, setExpandedWeeks] = useState<Set<number>>(() => new Set([0]));
   const [customDaysOpen, setCustomDaysOpen] = useState(false);
   const [customDaysText, setCustomDaysText] = useState("");
+  const [customMinutesOpen, setCustomMinutesOpen] = useState(false);
+  const [customMinutesText, setCustomMinutesText] = useState("");
   const [suggestion, setSuggestion] = useState<DurationSuggestion | null>(null);
   const [suggesting, setSuggesting] = useState(false);
   const generatingRef = useRef(false);
 
   const isCustomDays = !DAY_OPTIONS.includes(days);
+  const isCustomMinutes = !MINUTE_OPTIONS.includes(profile.dailyMinutes);
+
 
   const applyCustomDays = useCallback(() => {
     const parsed = Number(customDaysText.trim());
@@ -363,6 +369,17 @@ export default function CreateGoalScreen() {
   const updateProfile = useCallback((patch: Partial<GoalProfile>) => {
     setProfile((prev) => ({ ...prev, ...patch }));
   }, []);
+
+  const applyCustomMinutes = useCallback(() => {
+    const parsed = Number(customMinutesText.trim());
+    if (!Number.isFinite(parsed) || parsed < MIN_MINUTES || parsed > MAX_MINUTES) {
+      Alert.alert("时间不合适", `请输入 ${MIN_MINUTES}–${MAX_MINUTES} 之间的分钟数。`);
+      return;
+    }
+    updateProfile({ dailyMinutes: Math.round(parsed) });
+    setCustomMinutesOpen(false);
+    Haptics.selectionAsync().catch(() => {});
+  }, [customMinutesText, updateProfile]);
 
   const generate = useCallback(async (skipStretchWarning = false) => {
     if (generatingRef.current) return;
@@ -658,6 +675,14 @@ export default function CreateGoalScreen() {
                     onPress={() => updateProfile({ dailyMinutes: m })}
                   />
                 ))}
+                <Chip
+                  label={isCustomMinutes ? `${profile.dailyMinutes}分钟 ·自定义` : "自定义"}
+                  active={isCustomMinutes}
+                  onPress={() => {
+                    setCustomMinutesText(isCustomMinutes ? String(profile.dailyMinutes) : "");
+                    setCustomMinutesOpen(true);
+                  }}
+                />
               </View>
             </View>
 
@@ -898,6 +923,51 @@ export default function CreateGoalScreen() {
           </View>
         </>
       )}
+
+      <Modal
+        visible={customMinutesOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCustomMinutesOpen(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={[styles.editBackdrop, { backgroundColor: colors.overlay }]}
+        >
+          <View style={[styles.editCard, { backgroundColor: colors.card }]}>
+            <Text style={[styles.label, { color: colors.text }]}>每天投入多久</Text>
+            <Text style={[styles.customHint, { color: colors.textSecondary }]}>
+              输入 {MIN_MINUTES}–{MAX_MINUTES} 之间的分钟数。填你真的能拿出来的时间，
+              高估会让计划从第一天就开始欠债。
+            </Text>
+            <TextInput
+              value={customMinutesText}
+              onChangeText={(t) => setCustomMinutesText(t.replace(/[^0-9]/g, ""))}
+              keyboardType="number-pad"
+              autoFocus
+              placeholder="例如 90"
+              placeholderTextColor={colors.textTertiary}
+              style={[
+                styles.customInput,
+                {
+                  backgroundColor: colors.background,
+                  color: colors.text,
+                  borderColor: colors.border,
+                },
+              ]}
+            />
+            <View style={{ flexDirection: "row", gap: spacing.sm }}>
+              <Button
+                title="取消"
+                variant="ghost"
+                onPress={() => setCustomMinutesOpen(false)}
+                style={{ flex: 1 }}
+              />
+              <Button title="确定" onPress={applyCustomMinutes} style={{ flex: 1 }} />
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       <Modal
         visible={customDaysOpen}
